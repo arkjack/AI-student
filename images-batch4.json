@@ -1,0 +1,10 @@
+[
+  {
+    "id": "hero-bg-wide",
+    "prompt": "Ultra-wide deep space scene for a kids AI education platform hero banner, landscape panorama, dark navy blue canvas #15285c, on the RIGHT SIDE: a cute white-blue 3D kawaii robot flying beside a small glowing earth planet with a tiny rocket and floating stars, soft nebula glow in the top right corner, on the LEFT SIDE: clean empty dark navy space reserved for text with only a few tiny faint stars, subtle and calm, minimalist, flat soft vector style with gentle gradients, no text, no characters on the left side, no watermark, high quality",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/hero-bg-wide.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x640"
+  }
+]

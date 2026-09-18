@@ -1,0 +1,18 @@
+[
+  {
+    "id": "login-bg",
+    "prompt": "Dark navy blue login page background for a kids AI education platform, deep space canvas in flat dark navy #15285c, soft subtle nebula glows in the top-left and bottom-right corners, tiny stars scattered lightly near the edges, one small glowing planet and a tiny rocket silhouette in the bottom right corner, very dim and subtle, minimalist, the large central area is calm, clean and empty with only a faint vignette, no text, no characters, no logo, flat soft vector style with gentle gradients, high quality, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/login-bg.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "1536x2048"
+  },
+  {
+    "id": "logo-badge",
+    "prompt": "Cute 3D kawaii robot head avatar badge for a kids AI education platform, round friendly white-blue robot face with big glowing cyan eyes and a happy smile, one small antenna on top, placed on a dark navy circular badge with a subtle glowing rim, badge centered on a solid dark navy blue background matching #15285c, soft 3D render style consistent with the platform mascot illustrations, smooth lighting, no text, no watermark, high quality",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/logo-badge.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "1024x1024"
+  }
+]

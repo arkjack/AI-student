@@ -1,0 +1,18 @@
+[
+  {
+    "id": "quick-lab",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, colorful jigsaw puzzle blocks connecting together with a small cute robot friend building a tower, cheerful block programming concept, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/quick-lab.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "quick-ask",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, friendly floating chat bubbles with a smiling question mark character and a tiny robot answering, sparkles around, Q&A assistant concept, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/quick-ask.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  }
+]

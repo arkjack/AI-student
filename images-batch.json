@@ -1,0 +1,74 @@
+[
+  {
+    "id": "hero-banner",
+    "prompt": "Children education platform hero illustration, cute 3D kawaii cartoon style, a friendly white-blue robot mascot flying happily beside a small glowing planet with a rocket, floating colorful blocks and stars around, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/hero-banner.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-1",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a cute robot head with big surprised eyes and a floating big question mark bubble, thought sparkles, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-1.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-2",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a giant cute cartoon eye looking at a photo card with a smiling face on it, camera and magic magnifier nearby, image recognition theme, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-2.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-3",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, colorful jigsaw puzzle blocks connecting together like building bricks with a little arrow, block programming concept, cheerful and playful, blue-white color scheme with warm orange and yellow accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-3.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-4",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a cute cartoon brain with a friendly face sitting on a small laptop, data dots and gears floating around, machine learning concept, blue-white color scheme with warm orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-4.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-5",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a cute cartoon microphone with a smiling face singing, music notes and sound waves floating, voice assistant concept, blue-white color scheme with pink and orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-5.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "course-6",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a magic paintbrush painting a rainbow with sparkles and floating stars, palette and paint drops, AI art concept, blue-white color scheme with warm rainbow accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/course-6.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "ai-writing",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a glowing fountain pen writing on a notebook page with fairy sparkles and story clouds floating above, creative writing magic concept, blue-white color scheme with purple and pink accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/ai-writing.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  },
+  {
+    "id": "ai-quiz",
+    "prompt": "Children education platform illustration, cute 3D kawaii cartoon style, a shiny golden trophy with question mark bubbles and star confetti around it, quiz game concept, exciting and playful, blue-white color scheme with golden and orange accents, soft rounded shapes, clean light blue background, high quality, no text, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/ai-quiz.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1152"
+  }
+]

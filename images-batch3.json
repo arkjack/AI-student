@@ -1,0 +1,10 @@
+[
+  {
+    "id": "login-bg-v2",
+    "prompt": "Dark navy blue login page background for a kids AI education platform, wide landscape composition, deep space canvas in flat dark navy #15285c, visible but delicate star field and soft nebula glows near the top-left and bottom-right corners, one small glowing planet and a tiny rocket silhouette in the bottom right corner, a few gentle stars scattered along the edges, subtle and calm, minimalist mood, the large central area is clean and empty with only a faint vignette, no text, no characters, no logo, flat soft vector style with gentle gradients, high quality, no watermark",
+    "image": "D:/想法、创意、实践/dph/毕业设计/frontend/src/assets/images/login-bg.jpg",
+    "provider": "seedream",
+    "model": "doubao-seedream-5-0-pro-260628",
+    "size": "2048x1536"
+  }
+]
