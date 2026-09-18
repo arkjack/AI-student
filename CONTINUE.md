@@ -150,6 +150,14 @@ cd frontend ; npm run dev
 8. **经验加分不要绕过 `ExpService.award`**：幂等与单日上限都在里面，直接 insert `exp_log` 会破坏约束。
 9. **PowerShell 5.1 读 UTF-8 无 BOM 文件会按 GBK 解码**（中文显示乱码，文件本身没问题）；
    判断文件内容请用 read/grep 工具，不要用 PowerShell 字符串匹配下结论。
+10. **git 代理残留会挡住本来能通的网络**：本机 `http.proxy` 曾被设为 `127.0.0.1:9674`，但该端口已无服务；
+    而直连 GitHub 是通的。遇到 `Failed to connect to github.com ... via 127.0.0.1` 时：
+    `git -c http.proxy= -c https.proxy= push origin main`（本次绕过），
+    或 `git config --global --unset http.proxy` + `--unset https.proxy`（永久清掉）。
+11. **诊断性查询不要丢弃 stderr**：本轮踩过 —— `mysql ... 2>/dev/null` 把 `Unknown column` 的报错整个吞掉，
+    表现为"表是空的"，白排查一轮（实际是 ALTER 只加在本地库、忘了加服务器）。
+12. **涉及外网的命令要拆小、给短超时**：直连 GitHub 从本机较慢，一条命令里串多个网络请求 + `--retry` + `sleep`
+    很容易撞上工具超时被中断，看起来像"卡住"。
 
 ---
 

@@ -199,6 +199,14 @@ D:\想法、创意、实践\dph\毕业设计\      ← ★ 项目根目录（202
 
 ## 8. 环境备忘
 
-- Node v24 / npm 11；代理：git 全局走 `127.0.0.1:7897`（Clash，**需保持开启**才能 clone GitHub；npm 直连即可）
+- Node v24 / npm 11；
+- **git 网络**：本机 `http.proxy` / `https.proxy` 曾被设为 `127.0.0.1:9674`，但**该端口已无服务监听**
+  （Clash 未运行或端口变更）。而**直连 GitHub 是通的**，所以这个残留配置会把本来能通的请求堵死。
+  遇到 `Failed to connect to github.com ... via 127.0.0.1` 时，用下面任一方式解决：
+  ```bash
+  git -c http.proxy= -c https.proxy= push origin main      # 本次绕过
+  git config --global --unset http.proxy                   # 永久清掉
+  git config --global --unset https.proxy
+  ```
 - Chrome：已开启 remote-debugging（CDP proxy 常驻 3456 端口，用于逐页验收）
 - 豆包 key：存于 `.baoyu-skills/.env` 的 `ARK_API_KEY`（**该目录已加入 .gitignore，严禁提交**）
