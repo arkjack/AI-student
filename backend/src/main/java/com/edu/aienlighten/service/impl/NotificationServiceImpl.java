@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.edu.aienlighten.common.BizException;
 import com.edu.aienlighten.entity.Notification;
+import com.edu.aienlighten.entity.User;
 import com.edu.aienlighten.mapper.NotificationMapper;
+import com.edu.aienlighten.mapper.UserMapper;
 import com.edu.aienlighten.security.UserContext;
 import com.edu.aienlighten.service.NotificationService;
 import com.edu.aienlighten.vo.NotificationVO;
@@ -20,9 +22,19 @@ import java.util.stream.Collectors;
 public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationMapper notificationMapper;
+    private final UserMapper userMapper;
 
     @Override
     public void push(Long userId, String type, String title, String content, String link) {
+        // 尊重用户的「消息通知」开关：关闭后不再为其生成任何站内消息。
+        // 开关为 null（早期数据）按开启处理。
+        User receiver = userMapper.selectById(userId);
+        if (receiver == null) {
+            return;
+        }
+        if (receiver.getNotifyEnabled() != null && receiver.getNotifyEnabled() == 0) {
+            return;
+        }
         Notification n = new Notification();
         n.setUserId(userId);
         n.setType(type);

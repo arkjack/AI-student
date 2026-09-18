@@ -7,6 +7,7 @@ import com.edu.aienlighten.entity.CourseProgress;
 import com.edu.aienlighten.mapper.CourseMapper;
 import com.edu.aienlighten.mapper.CourseProgressMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.ProgressService;
 import com.edu.aienlighten.vo.CourseProgressVO;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class ProgressServiceImpl implements ProgressService {
 
     private final CourseProgressMapper courseProgressMapper;
     private final CourseMapper courseMapper;
+    private final ExpService expService;
 
     @Override
     public List<CourseProgressVO> myProgress() {
@@ -65,6 +67,7 @@ public class ProgressServiceImpl implements ProgressService {
         int progress = dto.getProgress() == null ? 0 : dto.getProgress();
         int completed = progress >= 100 ? 1 : 0;
         int watchSeconds = dto.getWatchSeconds() == null ? 0 : dto.getWatchSeconds();
+        CourseProgress saved;
         if (exist == null) {
             CourseProgress p = new CourseProgress();
             p.setStudentId(studentId);
@@ -73,13 +76,42 @@ public class ProgressServiceImpl implements ProgressService {
             p.setWatchSeconds(watchSeconds);
             p.setCompleted(completed);
             courseProgressMapper.insert(p);
-            return p;
+            saved = p;
         } else {
             exist.setProgress(progress);
             exist.setWatchSeconds(watchSeconds);
             exist.setCompleted(completed);
             courseProgressMapper.updateById(exist);
-            return exist;
+            saved = exist;
         }
+        awardCourseExp(studentId, dto.getCourseId(), progress);
+        return saved;
+    }
+
+    /**
+     * 看课经验。
+     *
+     * <p>里程碑与完成奖励都靠 (student_id, source_key) 唯一键幂等 ——
+     * 进度只增不减，所以这里用 {@code progress >= 阈值} 判断即可，
+     * 反复上报同一进度不会重复给分。
+     */
+    private void awardCourseExp(Long studentId, Long courseId, int progress) {
+        if (progress >= 25) {
+            expService.award(studentId, "course", "course:" + courseId + ":p25",
+                    ExpService.EXP_COURSE_MILESTONE, "看课进度达到 25%");
+        }
+        if (progress >= 50) {
+            expService.award(studentId, "course", "course:" + courseId + ":p50",
+                    ExpService.EXP_COURSE_MILESTONE, "看课进度达到 50%");
+        }
+        if (progress >= 75) {
+            expService.award(studentId, "course", "course:" + courseId + ":p75",
+                    ExpService.EXP_COURSE_MILESTONE_LATE, "看课进度达到 75%");
+        }
+        if (progress >= 100) {
+            expService.award(studentId, "course", "course:" + courseId + ":done",
+                    ExpService.EXP_COURSE_DONE, "完成课程");
+        }
+        expService.onStudyAction(studentId);
     }
 }

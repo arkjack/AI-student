@@ -6,6 +6,7 @@ import com.edu.aienlighten.dto.AssignmentCreateDTO;
 import com.edu.aienlighten.dto.ReviewDTO;
 import com.edu.aienlighten.entity.Assignment;
 import com.edu.aienlighten.entity.AiWriting;
+import com.edu.aienlighten.entity.BlocklyProject;
 import com.edu.aienlighten.entity.BlocklyTemplate;
 import com.edu.aienlighten.entity.ClassInfo;
 import com.edu.aienlighten.entity.ClassStudent;
@@ -15,6 +16,7 @@ import com.edu.aienlighten.entity.Submission;
 import com.edu.aienlighten.entity.User;
 import com.edu.aienlighten.mapper.AiWritingMapper;
 import com.edu.aienlighten.mapper.AssignmentMapper;
+import com.edu.aienlighten.mapper.BlocklyProjectMapper;
 import com.edu.aienlighten.mapper.BlocklyTemplateMapper;
 import com.edu.aienlighten.mapper.ClassInfoMapper;
 import com.edu.aienlighten.mapper.ClassStudentMapper;
@@ -23,6 +25,7 @@ import com.edu.aienlighten.mapper.CourseProgressMapper;
 import com.edu.aienlighten.mapper.SubmissionMapper;
 import com.edu.aienlighten.mapper.UserMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.NotificationService;
 import com.edu.aienlighten.service.OperationLogService;
 import com.edu.aienlighten.service.TeacherAssignmentService;
@@ -54,8 +57,10 @@ public class TeacherAssignmentServiceImpl implements TeacherAssignmentService {
     private final UserMapper userMapper;
     private final CourseMapper courseMapper;
     private final BlocklyTemplateMapper blocklyTemplateMapper;
+    private final BlocklyProjectMapper blocklyProjectMapper;
     private final OperationLogService operationLogService;
     private final NotificationService notificationService;
+    private final ExpService expService;
 
     @Override
     public List<AssignmentVO> listMyAssignments(Integer status) {
@@ -321,6 +326,11 @@ public class TeacherAssignmentServiceImpl implements TeacherAssignmentService {
         s.setScore(dto.getScore());
         s.setFeedback(dto.getFeedback());
         submissionMapper.updateById(s);
+        // 作业被评为优秀 → 给提交作业的学生额外经验（注意是学生，不是当前登录的教师）
+        if (dto.getScore() != null && dto.getScore() >= 90) {
+            expService.award(s.getStudentId(), "submission", "submission:" + s.getId() + ":excellent",
+                    ExpService.EXP_SUBMISSION_EXCELLENT, "作业被评为优秀（" + dto.getScore() + " 分）");
+        }
         // 通知学生：作业已批改
         if (a.getType() != null && a.getType() != 1) {
             notificationService.push(s.getStudentId(), "grade", "作业已批改",
@@ -339,6 +349,23 @@ public class TeacherAssignmentServiceImpl implements TeacherAssignmentService {
                     w.setScore(dto.getScore());
                     w.setFeedback(dto.getFeedback());
                     aiWritingMapper.updateById(w);
+                }
+            } catch (Exception e) {
+                // 同步失败不影响批改主流程
+            }
+        }
+        // 若为编程任务，把分数回写到对应的编程作品上（作品集据此显示「XX 分」）
+        if (a.getType() != null && a.getType() == 2) {
+            try {
+                BlocklyProject p = blocklyProjectMapper.selectOne(new LambdaQueryWrapper<BlocklyProject>()
+                        .eq(BlocklyProject::getStudentId, s.getStudentId())
+                        .eq(BlocklyProject::getAssignmentId, s.getAssignmentId())
+                        .orderByDesc(BlocklyProject::getId)
+                        .last("limit 1"));
+                if (p != null) {
+                    p.setScore(dto.getScore());
+                    p.setFeedback(dto.getFeedback());
+                    blocklyProjectMapper.updateById(p);
                 }
             } catch (Exception e) {
                 // 同步失败不影响批改主流程

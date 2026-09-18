@@ -18,23 +18,22 @@
       </div>
     </section>
 
-    <!-- ========== 学习数据条（无卡片，大数字 + 分隔） ========== -->
-    <!-- TODO: 学习统计暂无对应统计接口，目前为静态数字，待后端提供 /stats 后替换 -->
+    <!-- ========== 学习数据条（数值来自 /api/stats/student/my，实时聚合） ========== -->
     <section class="stats-strip">
       <div class="strip-item">
-        <b><span class="num" data-count="12">0</span><span class="unit">天</span></b>
+        <b><span class="num" :data-count="stats.streakDays">0</span><span class="unit">天</span></b>
         <span>连续学习</span>
       </div>
       <div class="strip-item">
-        <b><span class="num" data-count="7.7" data-decimals="1">0</span><span class="unit">h</span></b>
+        <b><span class="num" :data-count="stats.studyValue" :data-decimals="stats.studyDecimals">0</span><span class="unit">{{ stats.studyUnit }}</span></b>
         <span>累计学习</span>
       </div>
       <div class="strip-item">
-        <b><span class="num" data-count="5">0</span><span class="unit">门</span></b>
+        <b><span class="num" :data-count="stats.completedCourses">0</span><span class="unit">门</span></b>
         <span>完成课程</span>
       </div>
       <div class="strip-item">
-        <b><span class="num" data-count="4">0</span><span class="unit">个</span></b>
+        <b><span class="num" :data-count="stats.worksCount">0</span><span class="unit">个</span></b>
         <span>我的作品</span>
       </div>
     </section>
@@ -61,7 +60,7 @@
         <div v-for="n in classNotices" :key="n.id" class="notice-item">
           <span class="dot"></span>
           <span class="notice-title" :title="n.content">{{ n.title }}</span>
-          <span class="notice-teacher">{{ n.teacher }}</span>
+          <span class="notice-teacher">{{ n.tag }}</span>
         </div>
       </div>
     </section>
@@ -156,35 +155,30 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import CourseCard from '@/components/CourseCard.vue'
 import request from '@/api/request'
-import { gsap, ScrollTrigger, countUpGroup } from '@/utils/motion'
+import { gsap, ScrollTrigger, countUpGroup, prefersReducedMotion } from '@/utils/motion'
+import { buildAchievements } from '@/utils/achievements'
 import { PhPlay as Play, PhTrophy as Trophy, PhBell as Bell, PhGraduationCap as GraduationCap, PhPuzzlePiece as PuzzlePiece, PhChatCircleDots as ChatCircleDots } from '@phosphor-icons/vue'
 
 /* ============ 组件内 mock 数据：接口失败时的 fallback ============ */
+// 注意：学习数据条（连续学习 / 累计学习 / 完成课程 / 我的作品）不在 fallback 范围内，
+// 它读的是 /api/stats/student/my 的真实聚合值；接口失败时保持 0，不编造数字。
 const FALLBACK_USER = {
   id: 1, username: 'xiaoming', nickname: '小明', role: 'student',
-  class: '五年级(2)班', avatar: '🦊', level: 6, exp: 1860, expNext: 2000,
-  streakDays: 12, studyMinutes: 462, completedCourses: 5, worksCount: 4, avgScore: 92
+  class: '五年级(2)班', avatar: '🦊', level: 6, exp: 1860, expNext: 2000
 }
 const FALLBACK_ANNOUNCEMENTS = [
   { id: 1, title: '新学期 AI 挑战赛开始啦！', content: '完成 3 个 AI 实验即可获得「未来科学家」徽章，还能赢取积分奖励哦～', time: '2026-09-01', tag: '活动' },
   { id: 2, title: '平台公告', content: '新增课程《认识机器学习》上线，欢迎大家学习！', time: '2026-08-28', tag: '公告' },
   { id: 3, title: '系统维护通知', content: '本周六 22:00-24:00 系统维护，请合理安排学习时间。', time: '2026-08-25', tag: '维护' }
 ]
-const FALLBACK_CLASS_NOTICES = [
-  { id: 1, title: '下周一交作业啦', content: '请大家记得完成《什么是人工智能？》的问答作业。', teacher: '秦老师', time: '2026-09-02' },
-  { id: 2, title: '本周学习之星：小明', content: '小明本周完成 3 个 AI 实验，继续保持哦！', teacher: '秦老师', time: '2026-09-01' }
-]
-const FALLBACK_ACHIEVEMENTS = [
-  { emoji: '🚀', name: '初来乍到', desc: '完成注册', got: true },
-  { emoji: '📚', name: '学习达人', desc: '累计学习 5 小时', got: true },
-  { emoji: '🧩', name: '积木大师', desc: '提交 3 个编程作品', got: true },
-  { emoji: '✨', name: 'AI 探险家', desc: '完成 5 个 AI 实验', got: false },
-  { emoji: '🏆', name: '闯关王者', desc: '单次闯关 10 题全对', got: false }
-]
+// 班级通知与成就徽章没有 fallback —— 两块都接真实数据：
+//   班级通知 ← /notify/my 里由教师触发的那几类站内消息（布置任务 / 批改作业）
+//   成就徽章 ← /stats/student/my 的聚合值实时判定（见 utils/achievements.js）
+// 接口失败时宁可留空，也不显示编造出来的通知和徽章。
 const FALLBACK_COURSES = [
   {
     id: 1, title: '什么是人工智能？', category: 'AI 入门', difficulty: 1,
@@ -269,9 +263,9 @@ const askOk = ref(true)
 const announcements = ref(FALLBACK_ANNOUNCEMENTS)
 const announceDialog = ref(false)
 const route = useRoute()
-const classNotices = ref(FALLBACK_CLASS_NOTICES)
+const classNotices = ref([])
 // 无成就接口 → 保持静态 mock
-const achievements = ref(FALLBACK_ACHIEVEMENTS)
+const achievements = ref(buildAchievements(null))
 
 // 课程列表：进度来自 /progress/my，未开始与进行中分开
 const courseList = ref([])
@@ -317,12 +311,73 @@ const loadCourses = async () => {
   }
 }
 
+/* ============ 首页学习数据条：接真实统计接口 ============ */
+const stats = ref({ streakDays: 0, studyValue: 0, studyDecimals: 0, studyUnit: '分钟', completedCourses: 0, worksCount: 0 })
+
+const loadStats = async () => {
+  try {
+    const s = await request.get('/stats/student/my')
+    // 累计学习：不足 1 小时按分钟展示。真实数据常常只有几分钟，
+    // 一律换算成小时会显示成「0.0 h」，看起来像功能坏了。
+    const minutes = s?.studyMinutes ?? 0
+    const asHours = minutes >= 60
+    stats.value = {
+      streakDays: s?.streakDays ?? 0,
+      studyValue: asHours ? Math.round((minutes / 60) * 10) / 10 : Math.round(minutes),
+      studyDecimals: asHours ? 1 : 0,
+      studyUnit: asHours ? 'h' : '分钟',
+      completedCourses: s?.completedCourses ?? 0,
+      worksCount: s?.worksCount ?? 0
+    }
+    achievements.value = buildAchievements(s)
+  } catch (e) {
+    // 接口失败时保持 0：宁可显示「暂无数据」，也不编造好看的数字
+  }
+  await nextTick()
+  renderStats()
+}
+
+/** 数字滚动。用户偏好「减少动效」时直接写入终值 —— 否则数字会永远停在 0 */
+const renderStats = () => {
+  const els = Array.from(root.value?.querySelectorAll('.stats-strip [data-count]') || [])
+  if (prefersReducedMotion()) {
+    els.forEach((el) => {
+      el.textContent = Number(el.dataset.count || 0).toFixed(Number(el.dataset.decimals || 0))
+    })
+  } else {
+    countUpGroup(root.value, { duration: 1.4, stagger: 0.12 })
+  }
+}
+
+/* 班级通知：取教师触发的站内消息（布置任务 / 批改作业）；
+   平台公告不属于班级通知，因此按类型过滤掉 */
+const CLASS_NOTICE_TYPES = { task: '任务', grade: '批改' }
+const loadClassNotices = async () => {
+  try {
+    const list = await request.get('/notify/my')
+    classNotices.value = (list || [])
+      .filter(n => CLASS_NOTICE_TYPES[n.type])
+      .slice(0, 3)
+      .map(n => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        tag: CLASS_NOTICE_TYPES[n.type],
+        time: n.createdAt ? String(n.createdAt).slice(5, 10) : ''
+      }))
+  } catch (e) {
+    classNotices.value = []
+  }
+}
+
 /* ============ GSAP 动效编排 ============ */
 let ctx
 
 onMounted(() => {
   loadAnnouncements()
   loadCourses()
+  loadStats()
+  loadClassNotices()
   if (route.query.announce === '1') announceDialog.value = true
 
   if (!root.value) return
@@ -337,8 +392,8 @@ onMounted(() => {
         .from('.hero-sub', { y: 18, autoAlpha: 0, duration: 0.5 }, '-=0.38')
         .from('.hero-btns .k-btn', { y: 14, autoAlpha: 0, duration: 0.45, stagger: 0.09 }, '-=0.32')
 
-      // 数据条：数字滚动 + 进场
-      countUpGroup(root.value, { duration: 1.4, stagger: 0.12 })
+      // 数据条进场（数字滚动由 loadStats 拿到真实值后触发，
+      // 否则会先滚到 0 再跳变成真实数字）
       gsap.from('.stats-strip .strip-item', {
         y: 18,
         autoAlpha: 0,

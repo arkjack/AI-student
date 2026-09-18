@@ -14,6 +14,7 @@ import com.edu.aienlighten.mapper.ClassInfoMapper;
 import com.edu.aienlighten.mapper.ClassStudentMapper;
 import com.edu.aienlighten.mapper.SubmissionMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.HomeworkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class HomeworkServiceImpl implements HomeworkService {
     private final SubmissionMapper submissionMapper;
     private final ClassInfoMapper classInfoMapper;
     private final ClassApplyMapper classApplyMapper;
+    private final ExpService expService;
 
     @Override
     public List<Assignment> myAssignments() {
@@ -69,6 +71,7 @@ public class HomeworkServiceImpl implements HomeworkService {
         Submission exist = submissionMapper.selectOne(new LambdaQueryWrapper<Submission>()
                 .eq(Submission::getAssignmentId, dto.getAssignmentId())
                 .eq(Submission::getStudentId, studentId));
+        Submission saved;
         if (exist == null) {
             Submission s = new Submission();
             s.setAssignmentId(dto.getAssignmentId());
@@ -76,14 +79,20 @@ public class HomeworkServiceImpl implements HomeworkService {
             s.setContent(dto.getContent());
             s.setStatus(1);
             submissionMapper.insert(s);
-            return s;
+            saved = s;
         } else {
             exist.setContent(dto.getContent());
             exist.setStatus(1);
             exist.setSubmittedAt(LocalDateTime.now());
             submissionMapper.updateById(exist);
-            return exist;
+            saved = exist;
         }
+        // 提交作业给经验。同一份作业反复覆盖提交由 sourceKey 幂等挡住，不会重复给分。
+        expService.award(studentId, "submission", "submission:" + saved.getId(),
+                ExpService.EXP_SUBMISSION,
+                "提交作业「" + (assignment.getTitle() == null ? "未命名" : assignment.getTitle()) + "」");
+        expService.onStudyAction(studentId);
+        return saved;
     }
 
     @Override

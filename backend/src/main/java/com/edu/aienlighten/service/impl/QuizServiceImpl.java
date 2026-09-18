@@ -13,6 +13,7 @@ import com.edu.aienlighten.mapper.QuizQuestionMapper;
 import com.edu.aienlighten.mapper.QuizRecordMapper;
 import com.edu.aienlighten.mapper.SubmissionMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.QuizService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class QuizServiceImpl implements QuizService {
     private final ClassStudentMapper classStudentMapper;
     private final AssignmentMapper assignmentMapper;
     private final SubmissionMapper submissionMapper;
+    private final ExpService expService;
 
     @Override
     public List<QuizQuestion> questions(String level) {
@@ -63,7 +65,22 @@ public class QuizServiceImpl implements QuizService {
         } catch (Exception e) {
             // 关联失败不影响成绩记录
         }
+        awardQuiz(r);
         return r;
+    }
+
+    /** 闯关经验：完成 + 满分额外奖励。sourceKey 带记录主键，每次闯关独立计分。 */
+    private void awardQuiz(QuizRecord r) {
+        Long sid = r.getStudentId();
+        expService.award(sid, "quiz", "quiz:" + r.getId(),
+                ExpService.EXP_QUIZ_DONE, "完成知识闯关");
+        boolean perfect = r.getTotalCount() != null && r.getTotalCount() > 0
+                && Objects.equals(r.getCorrectCount(), r.getTotalCount());
+        if (perfect) {
+            expService.award(sid, "quiz", "quiz:" + r.getId() + ":perfect",
+                    ExpService.EXP_QUIZ_PERFECT, "知识闯关全部答对");
+        }
+        expService.onStudyAction(sid);
     }
 
     @Override

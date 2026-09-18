@@ -28,7 +28,7 @@
         </router-link>
       </nav>
 
-      <div class="sb-foot" @click="$router.push('/login')">
+      <div class="sb-foot" @click="logout">
         <ArrowSquareOut :size="15" weight="bold" />
         <span>退出登录</span>
       </div>
@@ -53,8 +53,8 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="$router.push('/login')">切换身份</el-dropdown-item>
-                <el-dropdown-item divided @click="$router.push('/login')">退出登录</el-dropdown-item>
+                <el-dropdown-item @click="logout">切换身份</el-dropdown-item>
+                <el-dropdown-item divided @click="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -74,9 +74,10 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { PhArrowSquareOut as ArrowSquareOut, PhMagnifyingGlass as MagnifyingGlass } from '@phosphor-icons/vue'
 import NoticeBell from '@/components/NoticeBell.vue'
+import { clearAuth } from '@/api/request'
 
 const props = defineProps({
   user: { type: Object, required: true },
@@ -87,7 +88,14 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const router = useRouter()
 const search = ref('')
+
+/** 退出登录 / 切换身份：必须清掉 token，否则路由守卫会判定「已登录」把用户弹回首页 */
+function logout() {
+  clearAuth()
+  router.push('/login')
+}
 
 const currentMeta = computed(() => {
   const m = props.menus.find((x) => route.path.startsWith(x.path))

@@ -11,6 +11,33 @@ const request = axios.create({
   timeout: 30000
 })
 
+/* ------------------------------------------------------------
+   登录失效提示去重
+   一次页面渲染可能并发多个受保护请求，全部 401 时会各弹一条
+   「请先登录」，在屏幕上堆成一摞。这里做 3 秒窗口去重：
+   同一波失效只提示一次，用户看到的是干净的一条。
+   ------------------------------------------------------------ */
+let authNoticeAt = 0
+function notifyAuthRequired(msg) {
+  const now = Date.now()
+  if (now - authNoticeAt < 3000) return
+  authNoticeAt = now
+  ElMessage.warning(msg)
+}
+
+/** 清除登录态（token + 用户信息），退出登录与 401 都走这里 */
+export function clearAuth() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('userInfo')
+}
+
+/** 跳登录页；已经在登录页就不再重复跳转 */
+function toLogin() {
+  if (router.currentRoute.value.path !== '/login') {
+    router.push('/login')
+  }
+}
+
 // 请求拦截：注入 token
 request.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -27,10 +54,9 @@ request.interceptors.response.use(
     if (body && typeof body.code !== 'undefined') {
       if (body.code === 0) return body.data
       if (body.code === 401) {
-        ElMessage.warning(body.msg || '登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        localStorage.removeItem('userInfo')
-        router.push('/login')
+        notifyAuthRequired(body.msg || '登录已过期，请重新登录')
+        clearAuth()
+        toLogin()
         return Promise.reject(new Error(body.msg))
       }
       if (body.code === 403) {
@@ -44,11 +70,14 @@ request.interceptors.response.use(
     return body
   },
   (err) => {
-    if (err.response && err.response.status === 401) {
-      ElMessage.warning('请先登录')
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
-      router.push('/login')
+    const status = err.response && err.response.status
+    if (status === 401) {
+      notifyAuthRequired('请先登录')
+      clearAuth()
+      toLogin()
+    } else if (status === 403) {
+      // HTTP 层 403：跨域被拒 / 被安全策略拦截，与业务码 403 区分开提示
+      ElMessage.error('无权限访问或被安全策略拒绝')
     } else {
       ElMessage.error('网络异常，请稍后再试')
     }

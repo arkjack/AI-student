@@ -1,6 +1,7 @@
 package com.edu.aienlighten.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.edu.aienlighten.common.ExpLevels;
 import com.edu.aienlighten.entity.AiWriting;
 import com.edu.aienlighten.entity.BlocklyProject;
 import com.edu.aienlighten.entity.CourseProgress;
@@ -12,13 +13,14 @@ import com.edu.aienlighten.mapper.CourseProgressMapper;
 import com.edu.aienlighten.mapper.QuizRecordMapper;
 import com.edu.aienlighten.mapper.SubmissionMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ActivityService;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.StudentStatsService;
 import com.edu.aienlighten.vo.StudentStatsVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,6 +36,8 @@ public class StudentStatsServiceImpl implements StudentStatsService {
     private final AiWritingMapper aiWritingMapper;
     private final QuizRecordMapper quizRecordMapper;
     private final SubmissionMapper submissionMapper;
+    private final ActivityService activityService;
+    private final ExpService expService;
 
     @Override
     public StudentStatsVO myStats() {
@@ -110,12 +114,8 @@ public class StudentStatsServiceImpl implements StudentStatsService {
         // ===== 最近 7 天学习动态 =====
         fillWeekActivity(vo, sid);
 
-        // ===== 成长等级（经验值） =====
-        int exp = (int) (completedCourses * 50 + vo.getWorksCount() * 20 + graded.size() * 10 + quizCount * 10);
-        int level = exp / 200 + 1;
-        vo.setExp(exp);
-        vo.setLevel(level);
-        vo.setExpNext(level * 200);
+        // ===== 成长等级（经验取自 exp_log 流水，只增不减） =====
+        fillLevel(vo, sid);
 
         // ===== 本月成就 =====
         List<StudentStatsVO.MonthGoal> goals = new ArrayList<>();
@@ -126,6 +126,20 @@ public class StudentStatsServiceImpl implements StudentStatsService {
         vo.setMonthGoals(goals);
 
         return vo;
+    }
+
+    /** 经验与等级：曲线与称号口径见 {@link ExpLevels} */
+    private void fillLevel(StudentStatsVO vo, Long sid) {
+        int exp = expService.totalExp(sid);
+        int level = ExpLevels.levelOf(exp);
+        vo.setExp(exp);
+        vo.setLevel(level);
+        vo.setLevelTitle(ExpLevels.titleOf(level));
+        vo.setLevelEmoji(ExpLevels.emojiOf(level));
+        vo.setLevelExp(ExpLevels.expWithinLevel(exp));
+        vo.setLevelExpNeed(ExpLevels.expNeedOfLevel(exp));
+        vo.setLevelProgress(ExpLevels.progressPercent(exp));
+        vo.setNextLevelExp(ExpLevels.expToNextLevel(exp));
     }
 
     private StudentStatsVO.MonthGoal goal(String name, int cur, int goal) {
@@ -147,36 +161,8 @@ public class StudentStatsServiceImpl implements StudentStatsService {
             dayCount.put(start.plusDays(i), 0);
         }
 
-        LocalDateTime startTime = start.atStartOfDay();
-        LocalDateTime endTime = today.plusDays(1).atStartOfDay();
-
-        List<LocalDate> dates = new ArrayList<>();
-        courseProgressMapper.selectList(new LambdaQueryWrapper<CourseProgress>()
-                        .eq(CourseProgress::getStudentId, sid)
-                        .ge(CourseProgress::getUpdatedAt, startTime)
-                        .lt(CourseProgress::getUpdatedAt, endTime))
-                .forEach(p -> { if (p.getUpdatedAt() != null) dates.add(p.getUpdatedAt().toLocalDate()); });
-        quizRecordMapper.selectList(new LambdaQueryWrapper<QuizRecord>()
-                        .eq(QuizRecord::getStudentId, sid)
-                        .ge(QuizRecord::getFinishedAt, startTime)
-                        .lt(QuizRecord::getFinishedAt, endTime))
-                .forEach(r -> { if (r.getFinishedAt() != null) dates.add(r.getFinishedAt().toLocalDate()); });
-        submissionMapper.selectList(new LambdaQueryWrapper<Submission>()
-                        .eq(Submission::getStudentId, sid)
-                        .ge(Submission::getSubmittedAt, startTime)
-                        .lt(Submission::getSubmittedAt, endTime))
-                .forEach(s -> { if (s.getSubmittedAt() != null) dates.add(s.getSubmittedAt().toLocalDate()); });
-        blocklyProjectMapper.selectList(new LambdaQueryWrapper<BlocklyProject>()
-                        .eq(BlocklyProject::getStudentId, sid)
-                        .ge(BlocklyProject::getSubmittedAt, startTime)
-                        .lt(BlocklyProject::getSubmittedAt, endTime))
-                .forEach(p -> { if (p.getSubmittedAt() != null) dates.add(p.getSubmittedAt().toLocalDate()); });
-        aiWritingMapper.selectList(new LambdaQueryWrapper<AiWriting>()
-                        .eq(AiWriting::getStudentId, sid)
-                        .ge(AiWriting::getCreatedAt, startTime)
-                        .lt(AiWriting::getCreatedAt, endTime))
-                .forEach(w -> { if (w.getCreatedAt() != null) dates.add(w.getCreatedAt().toLocalDate()); });
-
+        List<LocalDate> dates = activityService.collectActivityDates(
+                sid, start.atStartOfDay(), today.plusDays(1).atStartOfDay());
         for (LocalDate d : dates) {
             if (dayCount.containsKey(d)) {
                 dayCount.merge(d, 1, Integer::sum);

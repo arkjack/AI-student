@@ -100,7 +100,17 @@
           <el-tag v-if="p.status === '已提交'" type="success" round>{{ p.status }}</el-tag>
           <el-tag v-else type="info" round>{{ p.status }}</el-tag>
           <template v-if="p.submit">
-            <span class="score">得分 {{ p.score }}</span>
+            <!--
+              已提交 ≠ 已批改：blockly_project.score 只有老师批改后才有值，批改前为 null，
+              直接插值会渲染成「得分 」（光秃秃没有数字，看起来像坏了）。
+              0 分是合法分数，所以必须显式判 null/undefined，不能用真值判断。
+
+              另外要分清来源：只有教师布置的编程任务（p.assignmentId 非空）才会被批改，
+              学生自己平时提交的作品老师不批改，不能给它挂「待批改」，否则学生会一直空等。
+            -->
+            <span v-if="p.score !== null && p.score !== undefined" class="score">得分 {{ p.score }}</span>
+            <span v-else-if="p.assignmentId" class="score-none">待批改</span>
+            <span v-else class="score-none">已提交</span>
             <span class="feedback" :title="p.feedback"><ChatCircleDots weight="bold" /> {{ p.feedback }}</span>
           </template>
           <button class="mini-btn" @click="loadProject(p)">打开</button>
@@ -458,6 +468,8 @@ const loadProjects = async () => {
       submit: p.status === 1,
       score: p.score,
       feedback: p.feedback,
+      // 来源任务 id：非空 = 为教师布置的编程任务提交，老师会批改
+      assignmentId: p.assignmentId,
       time: formatDate(p.submittedAt || p.createdAt)
     }))
   } catch (e) {
@@ -552,23 +564,31 @@ const submit = async () => {
   }
   const blocksJson = JSON.stringify(Blockly.serialization.workspaces.save(ws))
   try {
-    await request.post('/project/save', { title: projectName.value, blocksJson, codeText, status: 1 })
-    // 关联作业提交：优先用 URL 携带的任务 id，否则尝试该学生可提交的编程任务
-    const asgId = taskAssignmentId.value
+    // 先确定这次提交是否对应教师布置的编程任务：
+    // 优先用作业中心带过来的 assignmentId，否则看该学生当前是否有可提交的编程任务。
+    // 这个 id 会随作品一起落库，作品集据此区分「老师布置的（会批改）」与「自己提交的（不批改）」，
+    // 老师批改时也靠它把分数回写到这份作品上。
+    let asgId = taskAssignmentId.value
+    if (!asgId) {
+      try {
+        const assigns = await request.get('/homework/assignments')
+        const progTask = (assigns || []).find(a => a.type === 2)
+        if (progTask) asgId = progTask.id
+      } catch (e) {}
+    }
+    await request.post('/project/save', {
+      title: projectName.value,
+      blocksJson,
+      codeText,
+      status: 1,
+      assignmentId: asgId || null
+    })
+    // 关联作业提交：有任务就同时交一份作业，供老师批改
     let linked = false
     if (asgId) {
       try {
         await request.post('/homework/submit', { assignmentId: asgId, content: codeText || '提交了积木作品' })
         linked = true
-      } catch (e) {}
-    } else {
-      try {
-        const assigns = await request.get('/homework/assignments')
-        const progTask = (assigns || []).find(a => a.type === 2)
-        if (progTask) {
-          await request.post('/homework/submit', { assignmentId: progTask.id, content: codeText || '提交了积木作品' })
-          linked = true
-        }
       } catch (e) {}
     }
     ElMessage.success(linked ? '作品已提交！等待老师批改～ 🎉' : '作品已提交！')
@@ -897,6 +917,12 @@ const submit = async () => {
   font-size: 13px;
   font-weight: 700;
   color: #d97706;
+}
+
+/* 已提交但老师还没批改：弱化的占位文案，避免看起来像已经得分 */
+.score-none {
+  font-size: 13px;
+  color: var(--ink-3);
 }
 
 .feedback {

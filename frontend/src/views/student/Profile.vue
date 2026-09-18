@@ -10,15 +10,23 @@
         </div>
       </div>
       <div class="profile-info">
-        <h2>{{ user.nickname }} <el-tag round type="success" size="small">一星学员</el-tag></h2>
+        <h2>
+          {{ user.nickname }}
+          <el-tag round type="success" size="small">{{ user.levelEmoji }} {{ user.levelTitle }}</el-tag>
+        </h2>
         <div class="tags">
           <span class="k-tag"><GraduationCap :size="16" weight="bold" /> {{ classText }}</span>
           <span class="k-tag k-tag--orange"><Sun :size="16" weight="bold" /> 连续学习 {{ user.streakDays }} 天</span>
-          <span class="k-tag k-tag--orange"><Star :size="16" weight="fill" /> 经验值 {{ user.exp }}</span>
+          <span class="k-tag k-tag--orange exp-tag" title="点击查看经验明细" @click="openExpLog">
+            <Star :size="16" weight="fill" /> 经验值 {{ user.exp }} · 明细 ›
+          </span>
         </div>
         <div class="exp-line">
-          <div class="exp-bar"><div class="exp-fill" :style="{ width: pct + '%' }"></div></div>
-          <span>Lv.{{ user.level }} → Lv.{{ user.level + 1 }}</span>
+          <div class="exp-bar"><div class="exp-fill" :style="{ width: user.levelProgress + '%' }"></div></div>
+          <span>
+            Lv.{{ user.level }} {{ user.levelTitle }} · 本级 {{ user.levelExp }}/{{ user.levelExpNeed }}
+            <em class="exp-next">（距升级还差 {{ user.nextLevelExp }} 经验）</em>
+          </span>
         </div>
       </div>
     </section>
@@ -66,7 +74,19 @@
         <span class="tile-icon"><PuzzlePiece :size="24" weight="bold" /></span>
         <b>{{ p.name }}</b>
         <div class="wt-status">
-          <el-tag v-if="p.status === '已提交'" type="success" round size="small">{{ p.score }} 分</el-tag>
+          <!--
+            作品状态共四个分支，判断顺序不能换：
+            1) score 非 null/undefined → 老师已批改，显示「XX 分」。
+               注意 0 分是合法分数，必须显式判空，不能用真值判断（if (p.score) 会把 0 分误判）。
+            2) 来自教师布置的编程任务（assignmentId 非空）、已提交但还没批改 → 「待批改」，
+               用 warning 橙色而不是 success 绿色，避免学生误以为已经得分。
+            3) 已提交但不是任务作品（学生自己平时提交的）→ 「已提交」。
+               这类作品老师不会批改，显示「待批改」会让学生一直空等，是错误的文案。
+            4) 其余是草稿。
+          -->
+          <el-tag v-if="p.score !== null && p.score !== undefined" type="success" round size="small">{{ p.score }} 分</el-tag>
+          <el-tag v-else-if="p.status === '已提交' && p.assignmentId" type="warning" round size="small">待批改</el-tag>
+          <el-tag v-else-if="p.status === '已提交'" type="info" round size="small">已提交</el-tag>
           <el-tag v-else type="info" round size="small">草稿</el-tag>
         </div>
       </div>
@@ -79,44 +99,116 @@
     </div>
     <section class="settings">
       <div class="set-item">
-        <span class="set-label"><Bell :size="16" weight="bold" /> 学习提醒</span>
-        <el-switch v-model="settings.remind" />
+        <span class="set-label">
+          <Bell :size="16" weight="bold" /> 学习提醒
+          <em class="set-hint">连续 2 天没有学习时发消息提醒你</em>
+        </span>
+        <el-switch v-model="settings.remind" :loading="settingsLoading" @change="savePreferences" />
       </div>
       <div class="set-item">
-        <span class="set-label"><MoonStars :size="16" weight="bold" /> 消息通知</span>
-        <el-switch v-model="settings.notify" />
+        <span class="set-label">
+          <MoonStars :size="16" weight="bold" /> 消息通知
+          <em class="set-hint">总开关，关闭后不再接收任何站内消息</em>
+        </span>
+        <el-switch v-model="settings.notify" :loading="settingsLoading" @change="savePreferences" />
       </div>
       <div class="set-item">
         <span class="set-label"><LockKey :size="16" weight="bold" /> 修改密码</span>
-        <el-button link type="primary" @click="ElMessage.info('原型阶段：修改密码功能待接入后端')">前往修改 ›</el-button>
+        <el-button link type="primary" @click="openPwdDialog">前往修改 ›</el-button>
       </div>
       <div class="set-item">
         <span class="set-label"><Question :size="16" weight="bold" /> 帮助与反馈</span>
-        <el-button link type="primary" @click="ElMessage.info('原型阶段：帮助中心待接入后端')">查看帮助 ›</el-button>
+        <el-button link type="primary" @click="$router.push('/student/guide')">查看新手教程 ›</el-button>
       </div>
     </section>
+
+    <!-- ========== 修改密码 ========== -->
+    <el-dialog
+      v-model="pwdDialog"
+      title="修改密码"
+      width="430px"
+      :close-on-click-modal="false"
+      @closed="resetPwdForm"
+    >
+      <el-form :model="pwdForm" label-position="top" @submit.prevent>
+        <el-form-item label="原密码">
+          <el-input
+            v-model="pwdForm.oldPassword"
+            type="password"
+            show-password
+            size="large"
+            placeholder="请输入当前使用的密码"
+            autocomplete="current-password"
+          />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input
+            v-model="pwdForm.newPassword"
+            type="password"
+            show-password
+            size="large"
+            placeholder="8~32 位，需同时包含字母和数字"
+            autocomplete="new-password"
+          />
+        </el-form-item>
+        <el-form-item label="确认新密码">
+          <el-input
+            v-model="pwdForm.confirmPassword"
+            type="password"
+            show-password
+            size="large"
+            placeholder="再输入一次新密码"
+            autocomplete="new-password"
+          />
+        </el-form-item>
+        <p class="pwd-tip">
+          ⚠️ 修改成功后需要<strong>用新密码重新登录</strong>，其他设备上的登录状态也会立即失效。
+        </p>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdDialog = false">取消</el-button>
+        <el-button type="primary" :loading="pwdLoading" @click="submitPassword">确认修改</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ========== 经验明细 ========== -->
+    <el-drawer v-model="expDrawer" title="经验明细" size="400px">
+      <p class="exp-drawer-tip">
+        经验来自真实学习行为，只会增加不会减少。每天最多可获得 300 经验。
+      </p>
+      <div v-if="expLogs.length" class="exp-log">
+        <div v-for="e in expLogs" :key="e.id" class="exp-item">
+          <div class="exp-item-main">
+            <span class="exp-item-remark">{{ e.remark || typeLabel(e.sourceType) }}</span>
+            <span class="exp-item-time">{{ fmtExpTime(e.createdAt) }}</span>
+          </div>
+          <span class="exp-item-val" :class="{ minus: e.exp < 0 }">
+            {{ e.exp > 0 ? '+' : '' }}{{ e.exp }}
+          </span>
+        </div>
+      </div>
+      <el-empty v-else description="还没有经验记录，去课程中心学第一课吧" />
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import request from '@/api/request'
+import request, { clearAuth } from '@/api/request'
 import { PhPencilSimple as PencilSimple, PhGraduationCap as GraduationCap, PhSun as Sun, PhStar as Star, PhUserCircle as UserCircle, PhCheck as Check, PhTrophy as Trophy, PhPuzzlePiece as PuzzlePiece, PhPlus as Plus, PhBell as Bell, PhMoonStars as MoonStars, PhLockKey as LockKey, PhQuestion as Question } from '@phosphor-icons/vue'
 
+import { buildAchievements } from '@/utils/achievements'
+
 /* ============ 组件内 mock 数据：接口失败时的 fallback ============ */
+// 注意：连续学习 / 经验值 / 等级 / 成就徽章都不在这里 —— 它们读 /stats/student/my 的真实值
 const FALLBACK_USER = {
   id: 1, username: 'xiaoming', nickname: '小明', role: 'student',
-  class: '五年级(2)班', avatar: '🦊', level: 6, exp: 1860, expNext: 2000,
-  streakDays: 12, studyMinutes: 462, completedCourses: 5, worksCount: 4, avgScore: 92
+  class: '五年级(2)班', avatar: '🦊', level: 1, levelTitle: 'AI 新芽', levelEmoji: '🌱',
+  levelExp: 0, levelExpNeed: 100, levelProgress: 0, nextLevelExp: 100,
+  exp: 0, streakDays: 0
 }
-const FALLBACK_ACHIEVEMENTS = [
-  { emoji: '🚀', name: '初来乍到', desc: '完成注册', got: true },
-  { emoji: '📚', name: '学习达人', desc: '累计学习 5 小时', got: true },
-  { emoji: '🧩', name: '积木大师', desc: '提交 3 个编程作品', got: true },
-  { emoji: '✨', name: 'AI 探险家', desc: '完成 5 个 AI 实验', got: false },
-  { emoji: '🏆', name: '闯关王者', desc: '单次闯关 10 题全对', got: false }
-]
 const FALLBACK_PROJECTS = [
   { id: 1, name: '小猫咪动起来', status: '已提交', score: 95 },
   { id: 2, name: '会算数的机器人', status: '已提交', score: 88 },
@@ -148,15 +240,141 @@ const sign = ref('和 AI 一起探索世界，长大要当科学家！🚀')
 const showAvatar = ref(false)
 const avatarList = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦁', '🐸', '🐧']
 
-const settings = ref({
-  remind: true,
-  notify: false
-})
+/* ============ 偏好设置（学习提醒 / 消息通知）—— 存后端，刷新不丢 ============ */
+const settings = ref({ remind: true, notify: true })
+const settingsLoading = ref(false)
 
-const pct = computed(() => Math.round(user.value.exp / user.value.expNext * 100))
+const loadPreferences = async () => {
+  try {
+    const p = await request.get('/user/preferences')
+    settings.value = { remind: p?.remindEnabled !== false, notify: p?.notifyEnabled !== false }
+  } catch (e) {}
+}
 
-// 无成就接口 → 保持静态 mock
-const achievements = ref(FALLBACK_ACHIEVEMENTS)
+/** 切换开关立即落库；失败则回滚成服务端值，避免界面与实际不一致 */
+const savePreferences = async () => {
+  settingsLoading.value = true
+  try {
+    const p = await request.put('/user/preferences', {
+      remindEnabled: settings.value.remind,
+      notifyEnabled: settings.value.notify
+    })
+    settings.value = { remind: p?.remindEnabled !== false, notify: p?.notifyEnabled !== false }
+    ElMessage.success('设置已保存')
+  } catch (e) {
+    await loadPreferences()
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+/* ============ 修改密码 ============ */
+const router = useRouter()
+const pwdDialog = ref(false)
+const pwdLoading = ref(false)
+const pwdForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
+
+const resetPwdForm = () => {
+  pwdForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+}
+
+const openPwdDialog = () => {
+  resetPwdForm()
+  pwdDialog.value = true
+}
+
+/**
+ * 前端预校验只为少发无效请求、给出即时反馈。
+ * 真正的强度校验与身份校验全部在后端 —— 前端校验可被绕过，不能作为安全依据。
+ */
+const validatePwdForm = () => {
+  const { oldPassword, newPassword, confirmPassword } = pwdForm.value
+  if (!oldPassword) return '请输入原密码'
+  if (!newPassword) return '请输入新密码'
+  if (newPassword.length < 8 || newPassword.length > 32) return '新密码长度需为 8~32 位'
+  if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) return '新密码需同时包含字母和数字'
+  if (newPassword === oldPassword) return '新密码不能与原密码相同'
+  if (newPassword !== confirmPassword) return '两次输入的新密码不一致'
+  return ''
+}
+
+const submitPassword = async () => {
+  const err = validatePwdForm()
+  if (err) {
+    ElMessage.warning(err)
+    return
+  }
+  pwdLoading.value = true
+  try {
+    await request.post('/user/change-password', {
+      oldPassword: pwdForm.value.oldPassword,
+      newPassword: pwdForm.value.newPassword
+    })
+    pwdDialog.value = false
+    ElMessage.success('密码修改成功，请用新密码重新登录')
+    // 后端已通过 password_changed_at 作废旧 token，这里同步清本地登录态并回登录页
+    clearAuth()
+    router.push('/login')
+  } catch (e) {
+    // 具体原因（原密码不正确 / 失败次数过多 / 强度不足）由响应拦截器统一提示
+  } finally {
+    pwdLoading.value = false
+  }
+}
+
+// 成就徽章：按真实学习统计实时判定（接口回来后刷新）
+const achievements = ref(buildAchievements(null))
+
+/* 学习统计：连续学习天数 / 经验值 / 等级 / 成就徽章统一从统计接口取，
+   接口失败时保持默认值（0 天 / Lv.1），不显示编造的数字 */
+const loadStats = async () => {
+  try {
+    const s = await request.get('/stats/student/my')
+    user.value.streakDays = s?.streakDays ?? 0
+    user.value.exp = s?.exp ?? 0
+    user.value.level = s?.level ?? 1
+    user.value.levelTitle = s?.levelTitle || 'AI 新芽'
+    user.value.levelEmoji = s?.levelEmoji || '🌱'
+    user.value.levelExp = s?.levelExp ?? 0
+    user.value.levelExpNeed = s?.levelExpNeed ?? 100
+    user.value.levelProgress = s?.levelProgress ?? 0
+    user.value.nextLevelExp = s?.nextLevelExp ?? 100
+    achievements.value = buildAchievements(s)
+  } catch (e) {}
+}
+
+/* ============ 经验明细 ============ */
+const expDrawer = ref(false)
+const expLogs = ref([])
+
+const EXP_TYPE_LABEL = {
+  daily: '每日首次学习',
+  course: '课程学习',
+  project: '编程作品',
+  writing: 'AI 写作',
+  quiz: '知识闯关',
+  submission: '作业提交',
+  streak: '连续学习奖励',
+  backfill: '历史学习成果'
+}
+const typeLabel = (t) => EXP_TYPE_LABEL[t] || '学习奖励'
+
+const fmtExpTime = (v) => {
+  if (!v) return ''
+  const d = new Date(String(v).replace(/-/g, '/'))
+  if (isNaN(d.getTime())) return String(v)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+const openExpLog = async () => {
+  expDrawer.value = true
+  try {
+    expLogs.value = (await request.get('/exp/log', { params: { limit: 30 } })) || []
+  } catch (e) {
+    expLogs.value = []
+  }
+}
 
 // 作品集走接口
 const works = ref([])
@@ -167,7 +385,9 @@ const loadWorks = async () => {
       id: p.id,
       name: p.title,
       status: p.status === 1 ? '已提交' : '草稿',
-      score: p.score
+      score: p.score,
+      // 来源任务 id：非空表示这是为教师布置的编程任务提交的，老师会批改
+      assignmentId: p.assignmentId
     }))
   } catch (e) {
     works.value = FALLBACK_PROJECTS
@@ -186,6 +406,8 @@ const saveProfile = () => {
 onMounted(() => {
   loadWorks()
   loadClassStatus()
+  loadStats()
+  loadPreferences()
 })
 </script>
 
@@ -426,6 +648,25 @@ onMounted(() => {
   align-items: center;
   gap: 9px;
   color: var(--ink);
+  flex-wrap: wrap;
+}
+
+/* 开关的说明文字：把「这个开关到底管什么」写清楚，避免用户不知道点了会怎样 */
+.set-hint {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+
+.pwd-tip {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+  background: var(--brand-grad-soft, #eef4ff);
+  border-radius: var(--radius-sm, 8px);
+  padding: 10px 12px;
 }
 
 .set-label svg {
@@ -440,5 +681,72 @@ onMounted(() => {
 @media (max-width: 900px) {
   .two-col { grid-template-columns: 1fr; }
   .badge-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- 经验明细 ---------- */
+.exp-tag {
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.exp-tag:hover {
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.18);
+}
+
+.exp-next {
+  font-style: normal;
+  color: var(--ink-3);
+}
+
+.exp-drawer-tip {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+  background: var(--brand-grad-soft, #eef4ff);
+  border-radius: var(--radius-sm, 8px);
+  padding: 10px 12px;
+}
+
+.exp-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.exp-item:last-child {
+  border-bottom: none;
+}
+
+.exp-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.exp-item-remark {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.exp-item-time {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.exp-item-val {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 15px;
+  color: #16a34a;
+}
+
+.exp-item-val.minus {
+  color: #dc2626;
 }
 </style>

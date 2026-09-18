@@ -21,6 +21,13 @@ public class StudentStatsVO {
     /** 已提交作业次数 */
     private Integer submitCount;
 
+    /**
+     * 连续学习天数（含今日）。
+     * 口径：看课进度更新 / 闯关 / 提交作业 / 提交编程作品 / AI 写作 这几类行为落到自然日后去重，
+     * 从今天往前数连续有记录的天数；今天还没有行为时从昨天起算。
+     */
+    private Integer streakDays;
+
     /** 最近 7 天学习动态（横轴标签，如 09-02） */
     private List<String> weekLabels;
     /** 最近 7 天学习动态（每日活跃次数） */
@@ -38,10 +45,20 @@ public class StudentStatsVO {
 
     /** 成长等级 */
     private Integer level;
-    /** 当前经验 */
+    /** 等级称号，如「AI 学徒」 */
+    private String levelTitle;
+    /** 等级徽章 emoji */
+    private String levelEmoji;
+    /** 累计总经验（来自 exp_log 流水求和） */
     private Integer exp;
-    /** 升到下一级所需经验 */
-    private Integer expNext;
+    /** 本级已获得的经验 */
+    private Integer levelExp;
+    /** 本级升级所需经验 */
+    private Integer levelExpNeed;
+    /** 本级进度百分比 0~100，前端可直接画进度条 */
+    private Integer levelProgress;
+    /** 距离下一级还差多少经验 */
+    private Integer nextLevelExp;
 
     /** 本月成就 */
     private List<MonthGoal> monthGoals;

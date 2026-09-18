@@ -43,8 +43,20 @@
           </button>
         </div>
 
-        <div class="writing-result">
+        <div class="writing-result" ref="editorRef" :class="{ 'is-flash': editorFlash }">
           <h3><FileText :size="16" weight="bold" /> 作品预览 <span class="k-tag">来自 DeepSeek</span></h3>
+
+          <!-- 从「我的写作记录」载入某篇作品后的说明条：讲清这次保存会发生什么 -->
+          <div v-if="openedRecord" class="opened-bar" :class="{ 'is-graded': openedRecord.graded }">
+            <Info :size="15" weight="bold" />
+            <span class="opened-text">
+              正在编辑《{{ openedRecord.title }}》
+              <template v-if="openedRecord.graded">（老师已批改 {{ openedRecord.score }} 分）—— 继续保存不会改动这篇已批改的作品，你的修改会另存为新草稿</template>
+              <template v-else>—— 保存会另存为新草稿，原记录保持不变</template>
+            </span>
+            <button class="opened-close" @click="closeOpenedRecord">关闭</button>
+          </div>
+
           <div v-if="generating" class="gen-anim">
             <span class="gen-orb">🤖</span>
             <p>AI 正在构思一个有趣的故事…</p>
@@ -58,7 +70,7 @@
           />
           <div class="result-btns" v-if="writing.content">
             <button class="k-btn k-btn--ghost" @click="saveWriting">
-              <FolderOpen :size="16" weight="bold" /> 保存到作品集
+              <FolderOpen :size="16" weight="bold" /> {{ openedRecord ? '另存为新草稿' : '保存到作品集' }}
             </button>
             <button class="k-btn k-btn--orange" @click="submitWriting">
               <PaperPlaneTilt :size="16" weight="bold" /> 提交作业
@@ -69,15 +81,34 @@
 
       <div class="history">
         <h3><Clock :size="16" weight="bold" /> 我的写作记录</h3>
-        <div v-for="r in writingRecords" :key="r.id" class="history-item">
+        <!-- 记录可点击：把主题/风格/正文重新载回上方编辑器继续查看或修改 -->
+        <p v-if="writingRecords.length" class="history-tip">点一下任意一条，就能重新打开继续查看或编辑～</p>
+        <div
+          v-for="r in writingRecords"
+          :key="r.id"
+          class="history-item"
+          :class="{ 'is-open': openedRecord && openedRecord.id === r.id }"
+          role="button"
+          tabindex="0"
+          @click="openWritingRecord(r)"
+          @keydown.enter="openWritingRecord(r)"
+          @keydown.space.prevent="openWritingRecord(r)"
+        >
           <div class="h-left">
             <b>{{ r.title }}</b>
             <span>{{ r.topic }} · {{ r.style }} · {{ r.time }}</span>
           </div>
-          <el-tag v-if="r.status === '已批改'" type="success" round>已批改 {{ r.score }}分</el-tag>
-          <el-tag v-else-if="r.status === '未批改'" type="warning" round>未批改</el-tag>
-          <el-tag v-else type="info" round>草稿</el-tag>
+          <div class="h-right">
+            <span v-if="openedRecord && openedRecord.id === r.id" class="h-open">
+              <PencilSimple :size="13" weight="bold" /> 编辑中
+            </span>
+            <el-tag v-if="r.status === '已批改'" type="success" round>已批改 {{ r.score }}分</el-tag>
+            <el-tag v-else-if="r.status === '未批改'" type="warning" round>未批改</el-tag>
+            <el-tag v-else type="info" round>草稿</el-tag>
+            <CaretRight :size="14" weight="bold" class="h-caret" />
+          </div>
         </div>
+        <p v-if="!writingRecords.length" class="history-empty">还没有写作记录，写一篇再点「保存到作品集」吧～</p>
       </div>
     </section>
 
@@ -201,8 +232,8 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
-import { gsap } from '@/utils/motion'
-import { PhSparkle as Sparkle, PhNotePencil as NotebookPen, PhTrophy as Trophy, PhChatCircleDots as ChatCircleDots, PhFileText as FileText, PhFolderOpen as FolderOpen, PhPaperPlaneTilt as PaperPlaneTilt, PhClock as Clock, PhQuestion as Question, PhCheckCircle as CheckCircle, PhXCircle as XCircle, PhArrowRight as ArrowRight, PhArrowsClockwise as ArrowsClockwise, PhChatCircleText as ChatCircleText, PhLightbulb as LightBulb } from '@phosphor-icons/vue'
+import { gsap, prefersReducedMotion } from '@/utils/motion'
+import { PhSparkle as Sparkle, PhNotePencil as NotebookPen, PhTrophy as Trophy, PhChatCircleDots as ChatCircleDots, PhFileText as FileText, PhFolderOpen as FolderOpen, PhPaperPlaneTilt as PaperPlaneTilt, PhClock as Clock, PhQuestion as Question, PhCheckCircle as CheckCircle, PhXCircle as XCircle, PhArrowRight as ArrowRight, PhArrowsClockwise as ArrowsClockwise, PhChatCircleText as ChatCircleText, PhLightbulb as LightBulb, PhPencilSimple as PencilSimple, PhCaretRight as CaretRight, PhInfo as Info } from '@phosphor-icons/vue'
 
 /* ============ 组件内 mock 数据：接口失败/AI 未配置时的 fallback ============ */
 const FALLBACK_QUIZ_BANK = [
@@ -216,9 +247,10 @@ const FALLBACK_QA_HISTORY = [
   { q: 'AI 会自己思考吗？', a: '现在的 AI 更多是在“模仿”人类的思考方式，它们通过大量数据学习规律，还不能像人一样真正地思考和感受哦！', time: '昨天' },
   { q: '我以后能学会编程吗？', a: '当然可以！编程就像搭积木，从最简单的积木块开始，一步一步来，你一定能学会！', time: '3 天前' }
 ]
+/* 接口失败时的本地示例：结构与 loadWritingRecords() 的映射结果保持一致，保证点击载入行为相同 */
 const FALLBACK_WRITING_RECORDS = [
-  { id: 1, title: '如果我是风', topic: '风', style: '童话风', content: '如果我是风，我要去森林里和树叶捉迷藏……', status: '已提交', score: 92, time: '2026-08-28' },
-  { id: 2, title: '会飞的书包', topic: '书包', style: '科幻风', content: '我的书包上有两个小翅膀，每天放学它带着我飞过操场……', status: '草稿', score: null, time: '2026-08-31' }
+  { id: 1, title: '如果我是风', topic: '风', style: '童话风', content: '如果我是风，我要去森林里和树叶捉迷藏……', status: '已批改', graded: true, submitted: true, score: 92, time: '2026-08-28' },
+  { id: 2, title: '会飞的书包', topic: '书包', style: '科幻风', content: '我的书包上有两个小翅膀，每天放学它带着我飞过操场……', status: '草稿', graded: false, submitted: false, score: null, time: '2026-08-31' }
 ]
 
 const formatDate = (val) => {
@@ -250,6 +282,12 @@ const writing = ref({
   content: ''
 })
 const generating = ref(false)
+/* 当前在编辑器里打开的那条历史记录（null = 正在写一篇新的） */
+const openedRecord = ref(null)
+/* 编辑器容器：载入记录后滚动到它，并用一次高亮闪烁告诉学生内容去了哪里 */
+const editorRef = ref(null)
+const editorFlash = ref(false)
+let flashTimer = null
 
 // 本地示例故事（AI 未配置/失败时的回退）
 const buildStory = (topic, style) => {
@@ -272,6 +310,8 @@ const generateStory = async () => {
   }
   generating.value = true
   writing.value.content = ''
+  // 新生成的故事不再属于之前打开的那条记录，「编辑中」标记要摘掉
+  openedRecord.value = null
   try {
     const res = await request.post('/ai/writing', {
       topic: writing.value.topic.trim(),
@@ -285,10 +325,14 @@ const generateStory = async () => {
     ElMessage.warning('AI 尚未配置，已使用本地示例')
   } finally {
     generating.value = false
+    // 生成结束后的正文一定是 AI 新写的（生成途中若点过历史记录也会被覆盖），
+    // 所以这里再摘一次「编辑中」标记，保证标记与编辑器内容始终一致
+    openedRecord.value = null
   }
 }
 
 const writingRecords = ref([])
+
 const loadWritingRecords = async () => {
   try {
     const list = await request.get('/writing/my')
@@ -297,8 +341,15 @@ const loadWritingRecords = async () => {
       title: r.topic || '未命名',
       topic: r.topic,
       style: r.style,
+      // 正文：后端 /writing/my 返回完整实体（含 TEXT 类型 content），
+      // 这里必须保留，否则点击记录时无法把文章重新载入编辑器
+      content: r.content || '',
       time: formatDate(r.createdAt),
       status: r.status === 1 ? (r.score != null ? '已批改' : '未批改') : '草稿',
+      // 老师已批改：保存时要在界面上明确提示「只另存新草稿，不动这一篇」
+      graded: r.status === 1 && r.score != null,
+      // 是否已提交过（status=1），用于区分提示语气
+      submitted: r.status === 1,
       score: r.score
     }))
   } catch (e) {
@@ -306,15 +357,76 @@ const loadWritingRecords = async () => {
   }
 }
 
+/* 点击一条写作记录 → 把主题、风格、正文重新载回上方编辑器 */
+const openWritingRecord = (record) => {
+  if (!record) return
+  writing.value.topic = record.topic || ''
+  writing.value.style = record.style || writing.value.style
+  writing.value.content = record.content || ''
+  openedRecord.value = record
+
+  if (record.content) {
+    ElMessage.success(`已载入《${record.title}》，可以继续编辑`)
+  } else {
+    ElMessage.warning(`《${record.title}》没有保存正文，只能看到主题和风格～`)
+  }
+
+  // 平滑滚动到编辑器，并让编辑器闪一下高亮，避免学生「找不到内容去哪了」
+  nextTick(() => {
+    const el = editorRef.value
+    if (!el) return
+    try {
+      el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
+    } catch (e) {
+      el.scrollIntoView()
+    }
+    editorFlash.value = true
+    clearTimeout(flashTimer)
+    flashTimer = setTimeout(() => { editorFlash.value = false }, 1400)
+  })
+}
+
+/* 退出「编辑已有作品」状态：只摘掉标记，不清空正文，避免误删学生已写内容 */
+const closeOpenedRecord = () => {
+  openedRecord.value = null
+}
+
 const saveWriting = async () => {
   if (!writing.value.content.trim()) {
     ElMessage.warning('还没有内容可保存～')
     return
   }
+  /* ------------------------------------------------------------------
+     关于 status 的取值（重点，勿轻改）：
+     1) 后端 POST /writing/save 是「新增」语义：WritingServiceImpl.saveWriting()
+        只做 aiWritingMapper.insert()，从不 update 已有行。
+        所以这里固定传 status:0 只会「多出一条草稿」，绝不会把已批改记录
+        （status=1 且 score 有值）降级成草稿，老师的分数不会丢。
+     2) 反过来，如果为了「保持原有 status」而传 status=1，危害更大：
+        TeacherAssignmentServiceImpl.review() 批改的是学生「id 最大的
+        status=1」那条（orderByDesc(id).last("limit 1")），新插入的 status=1
+        会把老师之后的批改引到这份新副本上，并重复发放提交经验。
+     3) 因此这里保持 status:0，并在界面上把「另存为新草稿」讲清楚
+        （见编辑器的说明条与下面的成功提示），不做静默处理。
+     ------------------------------------------------------------------ */
+  const from = openedRecord.value
   try {
-    await request.post('/writing/save', { topic: writing.value.topic, style: writing.value.style, content: writing.value.content, status: 0 })
-    ElMessage.success('故事已保存到作品集 💾')
-    loadWritingRecords()
+    const saved = await request.post('/writing/save', { topic: writing.value.topic, style: writing.value.style, content: writing.value.content, status: 0 })
+    if (from) {
+      if (from.graded) {
+        ElMessage.success({ message: `已另存为新草稿；原《${from.title}》的 ${from.score} 分批改结果保持不变`, duration: 4000 })
+      } else {
+        ElMessage.success('已另存为新草稿，原记录保持不变 💾')
+      }
+    } else {
+      ElMessage.success('故事已保存到作品集 💾')
+    }
+    await loadWritingRecords()
+    // 保存后编辑器里的内容对应的是这条新草稿，标记跟着挪过去，「编辑中」高亮才准确
+    if (saved && saved.id != null) {
+      const fresh = writingRecords.value.find(r => r.id === saved.id)
+      if (fresh) openedRecord.value = fresh
+    }
   } catch (e) {
     // 失败仅静默（拦截器已提示）
   }
@@ -702,6 +814,12 @@ onMounted(() => {
   color: var(--brand);
 }
 
+.history-tip {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 .history-item {
   display: flex;
   justify-content: space-between;
@@ -710,11 +828,124 @@ onMounted(() => {
   background: #f8faff;
   border-radius: 12px;
   margin-bottom: 8px;
+  /* 整行可点击：重新载入到上方编辑器 */
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
 }
 
-.h-left { display: flex; flex-direction: column; }
+.history-item:hover {
+  background: var(--brand-grad-soft);
+  border-color: var(--brand);
+  transform: translateX(2px);
+}
+
+.history-item:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* 当前正在编辑器里打开的那一条 */
+.history-item.is-open {
+  background: var(--brand-grad-soft);
+  border-color: var(--brand);
+}
+
+.h-left { display: flex; flex-direction: column; min-width: 0; }
 .h-left b { font-size: 14px; }
 .h-left span { font-size: 12px; color: var(--ink-3); }
+
+.h-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.h-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.h-caret {
+  color: var(--ink-3);
+  opacity: 0.35;
+  transition: opacity 0.2s, transform 0.2s, color 0.2s;
+}
+
+.history-item:hover .h-caret,
+.history-item.is-open .h-caret {
+  opacity: 1;
+  color: var(--brand);
+  transform: translateX(2px);
+}
+
+.history-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8faff;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 已载入历史作品时的说明条：把「这次保存会做什么」讲在前面 */
+.opened-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  background: var(--brand-grad-soft);
+  color: var(--brand-deep);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.opened-bar svg { flex-shrink: 0; }
+
+/* 老师已批改的作品：换成暖色提醒，区别于普通草稿 */
+.opened-bar.is-graded {
+  background: var(--accent-soft);
+  color: #97530f;
+}
+
+.opened-text { flex: 1; }
+
+.opened-close {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.opened-close:hover { background: #fff; }
+
+/* 载入记录后编辑器闪一下，提示内容落到了这里 */
+.writing-result.is-flash {
+  animation: editor-flash 1.3s ease;
+}
+
+@keyframes editor-flash {
+  0% { background-color: var(--brand-grad-soft); box-shadow: 0 0 0 8px var(--brand-grad-soft); border-radius: 14px; }
+  100% { background-color: transparent; box-shadow: 0 0 0 8px transparent; border-radius: 14px; }
+}
 
 /* ----- 闯关 ----- */
 .quiz-top {
@@ -1010,5 +1241,7 @@ onMounted(() => {
   .panel-grid,
   .chat-grid { grid-template-columns: 1fr; }
   .quiz-options { grid-template-columns: 1fr; }
+  /* 窄屏时右侧的状态标签允许换行，避免挤压标题 */
+  .history-item { flex-wrap: wrap; gap: 6px 8px; }
 }
 </style>

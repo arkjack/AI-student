@@ -155,6 +155,20 @@ D:\想法、创意、实践\dph\毕业设计\      ← ★ 项目根目录（202
 4. **数据真实化**：新增 `GET /api/stats/student/my`（学生学习数据全部聚合自真实业务表）；`Stats.vue` / `AdminDashboard.vue` 移除前端 `FALLBACK_*` 模拟数据；修复看板注册趋势横轴（改读后端 `label`）。
 5. **修复**：管理端与教师端共用 `SidebarLayout`，导致管理员请求 `/api/notify/**` 得 403 又被拦截器清 token 踢回登录页 → notify 角色放宽为 `{0,1,2}` + 管理端隐藏铃铛 + 拦截器改为「**401 才清 token，403 仅提示**」；管理端「实验资源」模板字段映射错位（`title/difficulty(int)` → `name/level/description/enabled`）；清理 `operation_log` 中早期命令行测试写入的乱码详情。
 
+### 2026-09-19 部署上线与体系补全（第三轮，均已完成）
+
+1. **部署上线**：后端以 systemd 服务（Java 21 / Dragonwell）运行，前端构建产物交由 nginx 提供并复用站点原有 vhost 反代 `/api`，域名 + HTTPS 沿用原有证书。运维细节（服务器地址 / 部署路径 / 重部署与回滚 / 踩坑）见本地 `DEPLOY.md`（**已加入 .gitignore，不随仓库公开**）。
+2. **修掉 9 个缺陷**（详见 `CONTINUE.md` 第 2.2 节）：CORS 白名单缺生产域名导致公网登录一律 403、`init.sql` 缺 3 张表且 BCrypt 种子 hash 错误、`demo-data.sql` 漏插班级、课程 id 漂移导致封面整批消失、**路由守卫不校验登录态**导致未登录时弹一摞「请先登录」、本机构建产物永不清空、`course_category` id 漂移导致分类名全空、**老师批改编程任务的分数从不回写**。
+3. **经验值与等级体系（完整重做）**：新增 `exp_log` 流水表 —— 账本为唯一真相（总经验 = `SUM(exp)`）、`(student_id, source_key)` 唯一保证幂等、单日上限 300；等级曲线 `need(n) = 100 + 50×(n-1)`，称号 6 档；10 类经验来源接入 6 个业务触发点 + 每日首次学习 + 连续学习里程碑；历史数据一次性回填。新增 `ExpService` / `ExpLevels` / `ActivityService`（后者从统计服务抽出以破除循环依赖）。
+4. **修改密码**：`POST /api/user/change-password`（路径刻意避开公开白名单 `/api/auth/**`），校验原密码 + 强度（8~32 位含字母数字）+ 15 分钟内失败 5 次锁定；成功后写 `password_changed_at`，拦截器据此**作废改密前签发的所有 token**。顺带修复 `User.password` 缺 `@JsonIgnore` 导致 `/api/user/me` 把 BCrypt 散列下发给前端。
+5. **用户偏好真正生效**：`user.notify_enabled` 为**总开关**（关闭后后端不再为该用户生成任何站内消息），`user.remind_enabled` 为**子开关**（`StudyRemindTask` 每天 20:00 扫描，连续 ≥2 天未学习则推送提醒，cron 可用 `app.remind.cron` 覆盖）。
+6. **新手教程页** `/student/guide`：5 步快速上手 + 8 个功能模块说明 + 7 条 FAQ（内容与实际实现严格对齐）。
+7. **学习数据全面真实化**：首页数据条 / 班级通知 / 成就徽章 / 个人中心等级经验 / 作品集评分状态全部改接真实接口，删除写死的假数据（此前**所有学生看到的数字完全一样**）；新增 `frontend/src/utils/achievements.js` 统一徽章判定。
+8. **作品评分语义修正**：`blockly_project` 新增 `assignment_id` 区分「教师布置的编程任务作品」与「学生自由创作」；老师批改 `type=2` 任务时把分数回写到作品；前端四分支显示（已批改 `XX 分` / 任务未批改 `待批改` / 自由创作 `已提交` / `草稿`）。注意判断必须显式判空 —— **0 分是合法分数**。
+9. **写作记录可重开**：`AiLab.vue` 的记录列表补上点击载入（原本无点击事件，且 `loadWritingRecords` 丢掉了后端返回的 `content`）；含滚动定位、编辑中高亮、以及「已批改记录另存为新草稿」的保护文案。
+10. **构建产物清理**：新增 `frontend/scripts/clean-dist.mjs` 挂在 `prebuild` —— 本机环境下 Vite 自带的 `emptyOutDir` **静默失效**（`fs.rmSync(dir, {recursive:true})` 不抛异常也不删任何文件），曾累积到 1300 个文件 / 23 份 `Login-*.js`，并导致已下线代码仍可通过旧哈希访问。
+11. **全局异常处理补 404/405**：路由写错时原本被兜底成 `code:9999 系统繁忙`，排查时极易误判成服务故障。
+
 ### 后端新增接口速查（本次）
 
 | 接口 | 说明 |
@@ -170,12 +184,15 @@ D:\想法、创意、实践\dph\毕业设计\      ← ★ 项目根目录（202
 | `GET /api/notify/my` / `unread-count` / `POST read-all` / `{id}/read` | 站内消息（角色 0/1/2） |
 | `GET /api/admin/templates` / `PUT /api/admin/templates/{id}/enabled` | 编程模板列表 / 启停 |
 | `GET /api/project/templates` | 启用的编程模板（学生/教师共用） |
-| `GET /api/stats/student/my` | 学生学习数据聚合（真实业务表） |
+| `GET /api/stats/student/my` | 学生学习数据聚合（真实业务表），含 `streakDays` 与等级字段 |
+| `POST /api/user/change-password` | 修改密码（校验原密码 + 强度 + 失败锁定 + 作废旧 token） |
+| `GET /api/user/preferences` / `PUT` | 读取 / 更新偏好设置（学习提醒、消息通知） |
+| `GET /api/exp/log?limit=20` | 我的经验明细（只返回当前登录用户自己的流水） |
 
 ### 后端快速指引（backend 目录）
 
 - 启动：`mvn spring-boot:run`（端口 8080；数据源已配 ai_edu 账号，见 application.yml）
-- 数据库：库 `ai_enlighten`（**19 张表**，初始化脚本 `sql/init.sql` + `class_apply` 入班申请表 + `blockly_template` 编程模板表 + `notification` 站内消息表），业务账号与密码见本地 `application-local.yml`（该文件不入库，模板见 `application-local.yml.example`）
+- 数据库：库 `ai_enlighten`（**20 张表**，初始化脚本 `sql/init.sql` + `class_apply` 入班申请表 + `blockly_template` 编程模板表 + `notification` 站内消息表 + `exp_log` 经验流水表），业务账号与密码见本地 `application-local.yml`（该文件不入库，模板见 `application-local.yml.example`）
 - 演示账号（密码均 123456）：`admin` / `teacher01` / `student01`
 - 接口约定：`/api/auth/login|register` 公开；其余 `/api/**` 需 `Authorization: Bearer <token>`；统一返回 `{code,msg,data}`（code 0 成功；401 未登录/403 无权限/1003 用户名密码错误）
 - 已踩坑备忘：① JDBC `characterEncoding=UTF-8`（不能写 utf8mb4）② BCrypt hash 更新务必用 SQL 文件执行（PowerShell 会展开 `$`）③ 拦截器强制登录后，注册/登录白名单在 `WebConfig.excludePathPatterns`

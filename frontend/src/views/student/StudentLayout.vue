@@ -33,7 +33,7 @@
               <el-dropdown-menu>
                 <el-dropdown-item @click="$router.push('/student/profile')">个人中心</el-dropdown-item>
                 <el-dropdown-item @click="$router.push('/student/stats')">学习数据</el-dropdown-item>
-                <el-dropdown-item divided @click="$router.push('/login')">退出登录</el-dropdown-item>
+                <el-dropdown-item divided @click="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -60,6 +60,16 @@
 import { ref } from 'vue'
 import { PhHouse as House, PhBookOpen as BookOpen, PhPuzzlePiece as PuzzlePiece, PhSparkle as Sparkle, PhNotePencil as NotebookPen, PhChartLineUp as ChartLineUp, PhChatCircleDots as ChatCircleDots } from '@phosphor-icons/vue'
 import NoticeBell from '@/components/NoticeBell.vue'
+import { useRouter } from 'vue-router'
+import { clearAuth } from '@/api/request'
+
+const router = useRouter()
+
+/** 退出登录：必须清掉 token，否则路由守卫会判定「已登录」把用户弹回首页 */
+function logout() {
+  clearAuth()
+  router.push('/login')
+}
 
 // 从 localStorage.userInfo 读取当前登录用户，回退默认值
 function readUserInfo() {

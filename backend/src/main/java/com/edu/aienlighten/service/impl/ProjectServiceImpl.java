@@ -6,6 +6,7 @@ import com.edu.aienlighten.dto.ProjectSaveDTO;
 import com.edu.aienlighten.entity.BlocklyProject;
 import com.edu.aienlighten.mapper.BlocklyProjectMapper;
 import com.edu.aienlighten.security.UserContext;
+import com.edu.aienlighten.service.ExpService;
 import com.edu.aienlighten.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import java.util.Objects;
 public class ProjectServiceImpl implements ProjectService {
 
     private final BlocklyProjectMapper blocklyProjectMapper;
+    private final ExpService expService;
 
     @Override
     public List<BlocklyProject> myProjects() {
@@ -31,6 +33,7 @@ public class ProjectServiceImpl implements ProjectService {
     public BlocklyProject saveProject(ProjectSaveDTO dto) {
         BlocklyProject p = new BlocklyProject();
         p.setStudentId(UserContext.userId());
+        p.setAssignmentId(dto.getAssignmentId());
         p.setTitle(dto.getTitle());
         p.setBlocksJson(dto.getBlocksJson());
         p.setCodeText(dto.getCodeText());
@@ -40,6 +43,9 @@ public class ProjectServiceImpl implements ProjectService {
             p.setSubmittedAt(LocalDateTime.now());
         }
         blocklyProjectMapper.insert(p);
+        if (status == 1) {
+            awardProject(UserContext.userId(), p);
+        }
         return p;
     }
 
@@ -49,7 +55,16 @@ public class ProjectServiceImpl implements ProjectService {
         p.setStatus(1);
         p.setSubmittedAt(LocalDateTime.now());
         blocklyProjectMapper.updateById(p);
+        awardProject(UserContext.userId(), p);
         return p;
+    }
+
+    /** 提交作品加经验。重复提交同一作品由 sourceKey 幂等挡住，不会反复给分。 */
+    private void awardProject(Long studentId, BlocklyProject p) {
+        expService.award(studentId, "project", "project:" + p.getId(),
+                ExpService.EXP_PROJECT_SUBMIT,
+                "提交编程作品「" + (p.getTitle() == null ? "未命名" : p.getTitle()) + "」");
+        expService.onStudyAction(studentId);
     }
 
     @Override

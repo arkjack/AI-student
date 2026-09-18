@@ -51,20 +51,6 @@
           </el-button>
         </el-form>
 
-        <div class="demo-tip">
-          <div class="tip-line">演示账号（密码 123456）：student01 / teacher01 / admin</div>
-          <div class="demo-btns">
-            <button class="k-btn demo-btn" @click="demoLogin('student01')">
-              <Student :size="15" weight="bold" /> 学生端
-            </button>
-            <button class="k-btn demo-btn k-btn--ghost" @click="demoLogin('teacher01')">
-              <GraduationCap :size="15" weight="bold" /> 教师端
-            </button>
-            <button class="k-btn demo-btn k-btn--ghost" @click="demoLogin('admin')">
-              <UserCircle :size="15" weight="bold" /> 管理端
-            </button>
-          </div>
-        </div>
       </div>
 
       <p class="copyright">AI 启蒙星球 · 基于 Vue 3 + Element Plus 高保真原型</p>
@@ -74,12 +60,13 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login, register, getClasses } from '@/api/auth'
-import { PhSmiley as Smiley, PhGraduationCap as GraduationCap, PhUser as User, PhLockKey as LockKey, PhStudent as Student, PhUserCircle as UserCircle } from '@phosphor-icons/vue'
+import { PhSmiley as Smiley, PhGraduationCap as GraduationCap, PhUser as User, PhLockKey as LockKey } from '@phosphor-icons/vue'
 
 const router = useRouter()
+const route = useRoute()
 const isRegister = ref(false)
 const form = ref({
   nickname: '',
@@ -123,22 +110,18 @@ const doRegister = () => {
     .finally(() => { authLoading.value = false })
 }
 
+const ROLE_HOME = { 0: '/admin/dashboard', 1: '/teacher/workbench', 2: '/student/home' }
+const ROLE_PREFIX = { 0: '/admin', 1: '/teacher', 2: '/student' }
+
 const afterAuth = (data) => {
   localStorage.setItem('token', data.token)
   localStorage.setItem('userInfo', JSON.stringify(data))
-  const roleHome = { 0: '/admin/dashboard', 1: '/teacher/workbench', 2: '/student/home' }
-  router.push(roleHome[data.role] || '/student/home')
-}
-
-/* 演示按钮：真实登录对应演示账号 */
-const demoLogin = (username) => {
-  authLoading.value = true
-  login({ username, password: '123456' })
-    .then((data) => {
-      ElMessage.success(`以 ${username} 身份登录成功`)
-      afterAuth(data)
-    })
-    .finally(() => { authLoading.value = false })
+  const home = ROLE_HOME[data.role] || '/student/home'
+  // 被路由守卫拦下时会带上 ?redirect=原地址，登录后回跳；
+  // 仅当该地址属于当前登录角色时才采用，避免跨角色跳转
+  const redirect = route.query.redirect
+  const prefix = ROLE_PREFIX[data.role]
+  router.push(typeof redirect === 'string' && prefix && redirect.startsWith(prefix) ? redirect : home)
 }
 
 /* 按序加载 Emotion Ball 引擎脚本（rings → emotions → ball → engine） */
@@ -350,31 +333,6 @@ onUnmounted(() => {
   border: none;
   box-shadow: 0 6px 18px rgba(59, 130, 246, 0.35);
   margin-top: 4px;
-}
-
-.demo-tip {
-  margin-top: 18px;
-  border-top: 1.5px dashed var(--line);
-  padding-top: 16px;
-  text-align: center;
-}
-
-.tip-line {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-bottom: 10px;
-}
-
-.demo-btns {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.demo-btn {
-  font-size: 13.5px;
-  padding: 8px 18px;
 }
 
 .copyright {

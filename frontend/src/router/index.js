@@ -24,7 +24,8 @@ const routes = [
       { path: 'messages', name: 'StudentMessages', component: () => import('@/views/shared/MessageCenter.vue'), meta: { title: '消息中心' } },
       { path: 'qa', name: 'StudentQa', component: () => import('@/views/student/StudentQa.vue'), meta: { title: '答疑互动' } },
       { path: 'stats', name: 'StudentStats', component: () => import('@/views/student/Stats.vue'), meta: { title: '学习数据' } },
-      { path: 'profile', name: 'StudentProfile', component: () => import('@/views/student/Profile.vue'), meta: { title: '个人中心' } }
+      { path: 'profile', name: 'StudentProfile', component: () => import('@/views/student/Profile.vue'), meta: { title: '个人中心' } },
+      { path: 'guide', name: 'StudentGuide', component: () => import('@/views/student/Guide.vue'), meta: { title: '新手教程' } }
     ]
   },
   {
@@ -64,9 +65,53 @@ const router = createRouter({
   routes
 })
 
+/* ============================================================
+   登录态与角色守卫
+   ------------------------------------------------------------
+   为什么必须有这一段：守卫若不拦，未登录访问 /student/home 时
+   页面会先挂载，NoticeBell 打 2 个接口、Home 打 3 个接口，
+   5 个请求全部 401，每个都弹一次「请先登录」→ 登录页堆一摞提示。
+   注意：这只是前端体验层拦截，真正的权限校验在后端
+        AuthInterceptor + @RequireRole，前端守卫不能替代后端。
+   ============================================================ */
+const ROLE_HOME = { 0: '/admin/dashboard', 1: '/teacher/workbench', 2: '/student/home' }
+const ROLE_PREFIX = { 0: '/admin', 1: '/teacher', 2: '/student' }
+const GUARDED_PREFIXES = ['/admin', '/teacher', '/student']
+
+/** 当前登录角色；无 token 返回 null，token 在但信息损坏时按学生处理 */
+function currentRole() {
+  if (!localStorage.getItem('token')) return null
+  try {
+    const role = Number(JSON.parse(localStorage.getItem('userInfo') || '{}').role)
+    return Number.isInteger(role) && role >= 0 && role <= 2 ? role : 2
+  } catch (e) {
+    return 2
+  }
+}
+
 router.beforeEach((to) => {
-  // 原型阶段：默认已登录学生身份，直接放行；正式版这里做 JWT 校验
   document.title = `${to.meta.title ? to.meta.title + ' · ' : ''}AI 启蒙星球`
+
+  const role = currentRole()
+
+  // ① 未登录：只放行登录页，其余转登录页并记录回跳地址
+  if (role === null) {
+    if (to.path === '/login') return true
+    const query = to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {}
+    return { path: '/login', query }
+  }
+
+  // ② 已登录还去登录页（含退出后手滑回退）→ 回自己角色的首页
+  if (to.path === '/login') {
+    return ROLE_HOME[role] || '/student/home'
+  }
+
+  // ③ 角色越权（如学生直接敲 /admin/dashboard）→ 送回自己的首页
+  const allowed = ROLE_PREFIX[role]
+  if (GUARDED_PREFIXES.some(p => to.path.startsWith(p)) && !to.path.startsWith(allowed)) {
+    return ROLE_HOME[role] || '/student/home'
+  }
+
   return true
 })
 
