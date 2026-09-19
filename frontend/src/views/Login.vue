@@ -4,7 +4,9 @@
     <div class="brand-side">
       <div class="brand-inner">
         <div class="brand-logo">
-          <img src="@/assets/images/logo-badge.jpg" alt="AI 启蒙星球徽章" class="logo-badge k-float" />
+          <div class="logo-wrap k-float">
+            <img src="@/assets/images/logo-rose.png" alt="AI 启蒙星球" class="logo-badge" />
+          </div>
           <h1>AI 启蒙星球</h1>
           <p>AI 科普课、积木编程、动手实验，一条线学完。</p>
         </div>
@@ -18,6 +20,8 @@
     <!-- 右侧表单区 -->
     <div class="form-side">
       <div class="form-card">
+        <!-- 窄屏下左侧品牌区整体隐藏，用深色版 logo 把品牌识别补回来 -->
+        <img src="@/assets/images/logo-rose-dark.png" alt="AI 启蒙星球" class="form-logo" />
         <h2>{{ isRegister ? '加入启蒙星球' : '欢迎回来' }}</h2>
         <p class="sub">{{ isRegister ? '注册一个账号，开始你的学习记录' : '登录后继续你的学习进度' }}</p>
 
@@ -216,21 +220,48 @@ onUnmounted(() => {
   padding: 40px;
 }
 
-.logo-badge {
-  display: block;
-  width: 86px;
-  height: 86px;
-  margin: 0 auto 8px;
+/* 品牌徽章：白玫瑰为透明底插画，直接置于深色星空上。
+   ① 不能用 border-radius:50% + object-fit:cover 裁切 —— 会把外层花瓣切掉；
+   ② 加一层冷白光晕，否则细密的白色花瓣会淹没在星点背景里显得"飘"；
+   ③ 尺寸随视口在 88~116px 之间伸缩，避免小屏挤、大屏小。 */
+.logo-wrap {
+  position: relative;
+  width: clamp(88px, 8vw, 116px);
+  height: clamp(88px, 8vw, 116px);
+  margin: 0 auto 16px;
+}
+
+.logo-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -34%;
   border-radius: 50%;
-  object-fit: cover;
-  border: 2.5px solid rgba(255, 255, 255, 0.55);
-  box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.28),
-    0 0 0 5px rgba(255, 255, 255, 0.08);
+  background: radial-gradient(
+    circle,
+    rgba(196, 214, 255, 0.30) 0%,
+    rgba(196, 214, 255, 0.11) 46%,
+    rgba(196, 214, 255, 0) 72%
+  );
+  pointer-events: none;
+}
+
+.logo-badge {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* 深色投影拉开与背景的层次，冷白微光呼应星空 */
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.36));
+}
+
+/* 窄屏专用的深色版 logo（默认隐藏，见底部媒体查询） */
+.form-logo {
+  display: none;
 }
 
 .brand-logo h1 {
-  font-size: 44px;
+  font-size: clamp(34px, 3.8vw, 44px);
   margin: 12px 0 6px;
   color: #fff;
   text-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
@@ -343,5 +374,17 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
   .brand-side { display: none; }
+
+  /* 品牌区整体隐藏后，把 logo 移到表单卡片顶部，白底用深色版 */
+  .form-logo {
+    display: block;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 14px;
+    object-fit: contain;
+  }
+
+  .form-side { padding: 28px 20px; }
+  .form-card { padding: 28px 22px 22px; }
 }
 </style>

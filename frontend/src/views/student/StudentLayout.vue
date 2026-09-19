@@ -4,7 +4,7 @@
     <header class="topbar">
       <div class="topbar-inner">
         <div class="logo" @click="$router.push('/student/home')">
-          <span class="logo-emoji">🤖</span>
+          <img src="@/assets/images/logo-rose-dark.png" alt="" class="logo-mark" />
           <span class="logo-text">AI 启蒙星球</span>
         </div>
 
@@ -137,8 +137,12 @@ const isActive = (path) => {
   flex-shrink: 0;
 }
 
-.logo-emoji {
-  font-size: 27px;
+/* 顶栏是白底，用蓝色版 logo（白色版在白底上会看不见） */
+.logo-mark {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .logo-text {

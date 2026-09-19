@@ -3,7 +3,7 @@
     <!-- 左侧深蓝侧栏 -->
     <aside class="sidebar">
       <div class="sb-brand" @click="$router.push(brandPath)">
-        <img src="@/assets/images/logo-badge.jpg" alt="" class="sb-logo" />
+        <img src="@/assets/images/logo-rose.png" alt="" class="sb-logo" />
         <span class="sb-brand-name">AI 启蒙星球</span>
       </div>
 
@@ -135,12 +135,13 @@ const isActive = (path) => route.path === path || route.path.startsWith(path + '
   cursor: pointer;
 }
 
+/* 白玫瑰为透明底插画，侧栏是深蓝底，直接用白色版即可。
+   不能再用 border-radius:50% + object-fit:cover —— 会裁掉外层花瓣。 */
 .sb-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.5);
-  object-fit: cover;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
 }
 
 .sb-brand-name {
