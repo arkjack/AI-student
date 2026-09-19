@@ -1,0 +1,418 @@
+/* ============================================================
+   AI 启蒙星球 · 设计系统 v4（去 AI 化）
+   方向：深海军蓝 + 暖橙单 accent，细边框取代软阴影，渐变清零
+   ============================================================ */
+
+:root {
+  /* ===== 主色：沉稳钴蓝（去 AI 亮蓝紫） ===== */
+  --brand: #1e4fd8;
+  --brand-deep: #163a9e;
+  --brand-soft: #e2e9fa;
+  --navy: #15285c;
+  --navy-soft: #223a75;
+
+  /* 兼容 token：v4 起均为纯色（渐变清零） */
+  --brand-grad: #1e4fd8;
+  --brand-grad-soft: #e2e9fa;
+
+  /* ===== 暖橙 accent（唯一强调色） ===== */
+  --accent: #ff8a3d;
+  --accent-deep: #e06e1f;
+  --accent-soft: #fff0e2;
+
+  /* 语义点缀（仅标签等小元素） */
+  --c-green: #2e9e6b;
+  --c-pink: #e05c8a;
+  --c-teal: #178a7d;
+  --c-yellow: #d9a20b;
+
+  /* ===== 中性色（近白纸感） ===== */
+  --ink: #1c2740;
+  --ink-2: #4c5a78;
+  --ink-3: #8896b4;
+  --line: #e6eaf3;
+  --bg: #f8fafd;
+  --card: #ffffff;
+  --surface-soft: #f4f7fc;
+
+  /* ===== 形状 ===== */
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
+
+  /* ===== 阴影：细边框声明层级，阴影极轻 ===== */
+  --shadow-card: 0 1px 2px rgba(21, 40, 92, 0.05);
+  --shadow-hover: 0 10px 28px rgba(21, 40, 92, 0.1);
+  --shadow-float: 0 12px 32px rgba(21, 40, 92, 0.14);
+
+  /* ===== 排版阶梯 ===== */
+  --font-title: 'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --fs-h1: 34px;
+  --fs-h2: 24px;
+  --fs-h3: 17px;
+  --fs-body: 15px;
+  --fs-sm: 13px;
+  --fs-xs: 12px;
+  --leading-tight: 1.2;
+  --leading-body: 1.65;
+  --measure: 65ch;
+
+  /* ===== 间距节奏 ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  /* ===== Element Plus 主题映射 ===== */
+  --el-color-primary: #1e4fd8;
+  --el-color-primary-light-3: #5479e2;
+  --el-color-primary-light-5: #8aa4ea;
+  --el-color-primary-light-7: #c1cff3;
+  --el-color-primary-light-8: #e2e9fa;
+  --el-color-primary-light-9: #f0f4fd;
+  --el-color-primary-dark-2: #163a9e;
+  --el-border-radius-base: 12px;
+  --el-font-family: var(--font-body);
+  --el-text-color-primary: #1c2740;
+  --el-text-color-regular: #4c5a78;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+b, strong, .stat-num, .num {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: rgba(30, 79, 216, 0.18);
+  color: var(--ink);
+}
+
+input,
+textarea {
+  caret-color: var(--brand);
+}
+
+:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2.5px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ===== 标题排版 ===== */
+h1, h2, h3, h4, .k-title {
+  font-family: var(--font-title);
+  letter-spacing: 0.02em;
+  line-height: var(--leading-tight);
+  font-weight: 400;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-h1); letter-spacing: 0.005em; }
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+/* ============================================================
+   页面容器与分区节奏
+   ============================================================ */
+.k-page {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+.k-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: var(--space-7) 0 var(--space-5);
+}
+
+.k-section-head h2 {
+  margin: 0;
+  font-size: var(--fs-h2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.k-section-head .more {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.k-section-head .more:hover {
+  color: var(--brand);
+}
+
+.page-head {
+  margin-bottom: var(--space-6);
+}
+
+.k-h1-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.k-h1-icon svg {
+  color: var(--brand);
+  font-size: 26px;
+}
+
+/* ============================================================
+   卡片：细边框 + 极轻阴影（一次 elevation）
+   ============================================================ */
+.k-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5) var(--space-6);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.k-card--hover:hover {
+  transform: translateY(-3px);
+  border-color: #d4dcf0;
+  box-shadow: var(--shadow-hover);
+}
+
+/* 无卡列表 */
+.k-plain-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.k-plain-list > * + * {
+  border-top: 1px solid var(--line);
+}
+
+/* ============================================================
+   图标系统
+   ============================================================ */
+.icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--brand-soft);
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.icon-box--sm { width: 28px; height: 28px; border-radius: var(--radius-sm); }
+
+/* ============================================================
+   按钮：纯色（无渐变），按压反馈
+   ============================================================ */
+.k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 11px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+  color: #fff;
+  background: var(--brand);
+  box-shadow: 0 3px 10px rgba(30, 79, 216, 0.25);
+}
+
+.k-btn:hover {
+  background: var(--brand-deep);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(30, 79, 216, 0.32);
+}
+
+.k-btn:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.06s;
+}
+
+.k-btn svg { font-size: 17px; }
+
+.k-btn--ghost {
+  background: #fff;
+  color: var(--brand);
+  border: 1.5px solid #c8d3ee;
+  box-shadow: none;
+}
+
+.k-btn--ghost:hover {
+  border-color: var(--brand);
+  background: #fff;
+}
+
+.k-btn--orange { background: var(--accent); box-shadow: 0 3px 10px rgba(255, 138, 61, 0.3); }
+.k-btn--orange:hover { background: var(--accent-deep); }
+
+.k-btn--navy { background: var(--navy); box-shadow: 0 3px 10px rgba(21, 40, 92, 0.3); }
+.k-btn--navy:hover { background: var(--navy-soft); }
+
+.k-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================
+   小标签
+   ============================================================ */
+.k-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+
+.k-tag--orange { background: var(--accent-soft); color: var(--accent-deep); }
+.k-tag--green { background: #e4f4ec; color: #1f7a52; }
+.k-tag--pink { background: #fceaf1; color: #b03a63; }
+.k-tag--teal { background: #e0f3f0; color: #0f6b61; }
+.k-tag--yellow { background: #fbf3dc; color: #8f6a08; }
+
+.k-stars {
+  color: var(--c-yellow);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+}
+
+.k-grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c7d1e8;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   Element Plus 补丁
+   ============================================================ */
+.el-button {
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+
+.el-button:active {
+  transform: scale(0.97);
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  box-shadow: 0 0 0 1px #d9e1f2 inset;
+}
+
+.el-input__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--brand) inset;
+}
+
+.el-input__wrapper:focus-within,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1.5px var(--brand) inset !important;
+}
+
+.el-dialog {
+  border-radius: var(--radius-lg);
+}
+
+.el-message {
+  border-radius: 999px;
+}
+
+.el-empty__description p {
+  color: var(--ink-3);
+}
+
+/* ============================================================
+   动效
+   ============================================================ */
+.fade-page-enter-active {
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.fade-page-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.k-float {
+  animation: float-y 3.5s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

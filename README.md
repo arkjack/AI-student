@@ -28,6 +28,7 @@ AI 科普课程 · 图形化编程（Blockly）· AI 趣味实验（大模型）
 - [接口约定](#接口约定)
 - [技术亮点](#技术亮点)
 - [项目结构](#项目结构)
+- [复用与脚手架](#复用与脚手架)
 - [说明与声明](#说明与声明)
 
 ---
@@ -317,6 +318,29 @@ Blockly 积木转换为 JavaScript 后在独立 iframe 中执行，与主应用�
 │       └── aora-ball/                  # 登录页情感球引擎
 ├── test-all.mjs                        # 全量接口回归脚本
 └── PROJECT-README.md                   # 项目开发文档（架构 / 约定 / 踩坑）
+```
+
+---
+
+## 复用与脚手架
+
+本项目的构建流程已提炼为一个可复用的 Agent Skill，放在 [`skills/k12-ai-edu-platform/`](skills/k12-ai-edu-platform/SKILL.md)。
+
+它包含 **8 阶段构建流程**、可直接复用的后端骨架代码模板、19 张表数据模型、设计系统、大模型接入工程化方案，以及一份真实踩坑清单。
+
+```powershell
+# 一键生成可运行骨架（后端 + 前端 + 建表脚本）
+powershell -ExecutionPolicy Bypass -File skills/k12-ai-edu-platform/scripts/init-project.ps1 `
+  -TargetDir D:\my-platform -Package com.example.edu -AppName EduApplication
+
+# 验收检查（密钥泄露 / mock 残留 / 越权 / 构建）
+powershell -File skills/k12-ai-edu-platform/scripts/verify.ps1 -ProjectDir D:\my-platform
+```
+
+骨架代码均取自本项目**实际运行验证过**的版本，不是示例伪码。安装到本机技能目录后即可被 Agent 直接调用：
+
+```powershell
+Copy-Item skills/k12-ai-edu-platform "$env:USERPROFILE\.agents\skills\" -Recurse
 ```
 
 ---

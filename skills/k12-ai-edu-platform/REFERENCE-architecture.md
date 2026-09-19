@@ -1,0 +1,148 @@
+# 架构与数据模型
+
+## 1. 三端功能矩阵
+
+三端功能页数量建议 **学生 10 / 教师 7 / 管理 5** —— 这是经过验证的合理规模：学生端的功能天然最多（学习主体），管理端最少（多为配置与统计）。低于这个规模做不出「学练玩评」闭环，高于则超出毕设/课设的合理工期。
+
+### 学生端（`/student`，顶部导航布局）
+
+| 页面 | 核心职责 |
+|---|---|
+| 学习首页 | 学习概览、课程推荐、公告、成就徽章 |
+| 课程中心 | 按分类/难度浏览，卡片显示「已完成 / 学习中 X% / 未开始」 |
+| 课程详情 | 视频播放 + 进度上报（见 §3.1） |
+| 编程实验室 | Blockly 拖拽编程 → 转 JS → 沙箱执行 → 保存/提交作品 |
+| AI 魔法实验室 | AI 创意写作 + AI 知识闯关出题 |
+| 作业中心 | 接收任务、提交作业、查看批改反馈与得分 |
+| 答疑互动 | 向本班负责教师提问、查看回复 |
+| 学习数据 | 完成课程、作品数、平均分、闯关次数、观看时长、近 7 天活跃、成果分布、得分趋势 |
+| 个人中心 | 资料维护、班级状态（已入班 / 待审批 / 未加入） |
+| 消息中心 | 站内消息：类型筛选、逐条已读、一键全部已读 |
+
+### 教师端（`/teacher`，侧栏布局）
+
+工作台 · 班级管理（含入班申请审批）· 任务布置 · 进度追踪 · 作业批改 · 答疑互动 · 消息中心
+
+### 管理端（`/admin`，侧栏布局，复用教师端布局件）
+
+数据看板（注册趋势 / 课程完成率 / 活跃度）· 用户管理 · 课程管理 · 实验资源（编程模板启停 + AI 接口配置）· 公告与操作日志
+
+## 2. 权限矩阵
+
+角色用整数编码：**0 = 管理员，1 = 教师，2 = 学生**。
+
+| 资源 | 管理员 | 教师 | 学生 |
+|---|:---:|:---:|:---:|
+| 用户增删改 | ✅ | ❌ | ❌ |
+| 课程增删改 | ✅ | ❌ | 只读 |
+| 班级创建、入班审批 | ❌ | ✅（本班） | 申请加入 |
+| 任务布置、作业批改 | ❌ | ✅（本班） | 提交 |
+| 答疑回复 | ❌ | ✅（本班） | 提问 |
+| 编程模板启停、AI 配置 | ✅ | 只读启用项 | 只读启用项 |
+| 学习数据看板 | 全平台 | 本班 | 仅本人 |
+
+**要点**：教师的所有权限都限定在「本班」。实现上不是靠前端隐藏菜单，而是后端每次查询都带上 `teacher_id` 过滤条件。
+
+## 3. 业务闭环设计
+
+这五条闭环是本类平台区别于普通 CRUD 系统的核心，也是最容易做漏的部分。
+
+### 3.1 课程进度闭环
+
+```
+学生播放视频 → timeupdate 节流上报 → 后端取 max(已存进度, 本次上报)
+                                  → 进度达 100% → 反向标记该学生的课程任务为「已完成」
+```
+
+**为什么后端要取 `max` 而不是直接写入**：学生可以反复拖动进度条，直接写入等于允许刷分。取 `max` 后进度只增不减，即使前端上报值被篡改，也只影响观看进度、不影响任务判定的幂等性。
+
+### 3.2 入班审批流
+
+```
+学生注册时选班 → 生成待审批申请（class_apply）→ 教师审批
+                                              ├─ 同意 → 写入正式班级关系（class_student）
+                                              └─ 拒绝 → 记录状态，学生可重新申请
+```
+
+**不要**让学生注册即直接入班——那样教师端「班级管理」就没有任何实际职能了。
+
+### 3.3 站内消息触发点
+
+消息不是定时任务，而是**业务动作的副作用**。在下列位置调用统一的通知服务：
+
+| 业务动作 | 通知对象 | 类型 |
+|---|---|---|
+| 教师布置任务 | 该班每个学生 | `task` |
+| 教师批改作业 | 该学生 | `grade` |
+| 管理员发布公告 | 全体师生 | `announce` |
+| 学生提交入班申请 | 该班班主任 | `apply` |
+
+前端由「顶栏铃铛 + 未读红点 + 轮询」与「消息中心页」两部分组成。
+
+> ⚠️ 表字段名用 `is_read` 而非 `read` —— `read` 是 MySQL 保留字。
+
+### 3.4 资源启停管控
+
+教师布置任务时要能「关联某个编程模板」，管理员要能停用某个模板。管控必须**三端一致**：
+
+1. 管理端可启停模板；
+2. 学生端遇到停用模板：显示「（已停用）」、点击弹提示并回退选择、禁止运行与提交；
+3. 教师端只能关联启用中的模板，**后端对停用资源的发布请求直接拒绝**（错误码 `1001`）。
+
+第 3 条是关键——只做前端隐藏的话，直接调接口就绕过去了。
+
+### 3.5 答疑派单
+
+学生提问时自动解析「负责教师」：`class_student → class_info.teacher_id`，把 `teacher_id` 落到问答记录上。这样教师端只需查 `teacher_id = 自己` 的记录，无需每次反查班级。
+
+## 4. 数据模型（19 张表）
+
+按业务域分组：
+
+| 域 | 表 | 说明 |
+|---|---|---|
+| 用户与班级 | `user` | 账号、BCrypt 密码、角色、状态、`password_changed_at` |
+| | `class_info` | 班级，含 `teacher_id` |
+| | `class_student` | 班级-学生正式关系 |
+| | `class_apply` | 入班申请（审批流） |
+| 课程 | `course_category` | 课程分类 |
+| | `course` | 课程主体，含视频地址、难度、时长 |
+| | `course_progress` | 学习进度（`student_id` + `course_id` 唯一） |
+| 编程 | `blockly_template` | 编程模板，含 `enabled` 启停位 |
+| | `blockly_project` | 学生作品，含 `blocks_json` 与生成代码 |
+| AI 实验 | `ai_writing` | AI 创意写作记录（含教师评分） |
+| | `quiz_question` | 闯关题库 |
+| | `quiz_record` | 闯关记录与成绩 |
+| | `qa_record` | 答疑记录（含 `teacher_id` 派单） |
+| 教学 | `assignment` | 教师布置的任务（`type` 区分课程/编程/闯关） |
+| | `submission` | 作业提交与批改结果 |
+| | `announcement` | 平台公告 |
+| 系统 | `notification` | 站内消息（`user_id/type/title/content/link/is_read`） |
+| | `operation_log` | 操作日志 |
+| | `ai_config` | 大模型配置（provider/baseUrl/model/apiKey/超时/限流/内容安全开关） |
+
+完整 DDL 见 [`scripts/templates/backend/sql/init.sql`](scripts/templates/backend/sql/init.sql)，演示数据见 `demo-data.sql`。
+
+### 建模要点
+
+- **`assignment.type` 用一个字段承载三类任务**（课程 / 编程 / 闯关），完成判定分别走 `course_progress`、`blockly_project`、`quiz_record`。比建三张任务表更好维护。
+- **`course_progress` 对 `(student_id, course_id)` 建唯一索引**，把并发上报的竞态交给数据库。
+- **`ai_config` 的 `api_key` 只由后端读取**，任何查询接口返回前必须脱敏（见 REFERENCE-ai-integration.md）。
+- 时间字段统一 `datetime`，Jackson 全局配 `Asia/Shanghai` + `yyyy-MM-dd HH:mm:ss`。
+
+## 5. 后端分层约定
+
+```
+controller/   仅做参数校验 + 调用 service + 包装 Result，不写业务逻辑
+service/      接口定义
+service/impl/ 业务逻辑、事务边界
+mapper/       MyBatis-Plus BaseMapper，复杂查询写 XML 或用 Wrapper
+entity/       与表一一对应
+dto/          入参（带 @Valid 校验注解）
+vo/           出参（可聚合多表字段，如 AssignmentVO 带 className/submissionCount）
+common/       Result / BizException / GlobalExceptionHandler
+security/     JWT / 拦截器 / @RequireRole / UserContext
+config/       WebConfig / MybatisPlusConfig / JacksonConfig / JwtProperties
+```
+
+**约定**：Controller 返回类型一律 `Result<T>`；业务失败抛 `BizException(code, msg)` 由全局异常处理器统一转换，不要在每个方法里手写 `if (fail) return Result.fail(...)`。
