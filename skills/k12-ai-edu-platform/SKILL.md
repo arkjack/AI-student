@@ -1,6 +1,6 @@
 ---
 name: k12-ai-edu-platform
-description: 从零构建 K12 中小学 AI 启蒙教育平台（SpringBoot 3 + Vue 3 三端全栈），覆盖需求分析、19 张表数据模型、JWT+AOP 三级 RBAC 后端骨架、三端前端与设计系统、大模型接入（限流/内容安全/三级降级）、教学业务闭环与接口回归验收。Use when 用户要开发中小学/青少年教育平台、AI 启蒙或科普学习平台、课程+作业+班级管理类系统，或提到「三端（学生/教师/管理员）教学平台」「SpringBoot+Vue 教育类毕设/课设」「图形化编程 Blockly」「AI 实验 / 智能答疑 / 作业批改」「学情看板」，或要求参考 AI-student 做一个类似的网站。
+description: 从零构建 K12 中小学 AI 启蒙教育平台（SpringBoot 3 + Vue 3 三端全栈），覆盖需求分析、20 张表数据模型、JWT+AOP 三级 RBAC 后端骨架、三端前端与设计系统、大模型接入（限流/内容安全/三级降级）、经验值等级体系、教学业务闭环与接口回归验收。Use when 用户要开发中小学/青少年教育平台、AI 启蒙或科普学习平台、课程+作业+班级管理类系统，或提到「三端（学生/教师/管理员）教学平台」「SpringBoot+Vue 教育类毕设/课设」「图形化编程 Blockly」「AI 实验 / 智能答疑 / 作业批改」「学情看板」，或要求参考 AI-student 做一个类似的网站。
 ---
 
 # K12 AI 启蒙教育平台 · 构建流程
@@ -64,7 +64,7 @@ powershell -File scripts/verify.ps1 -ProjectDir D:\my-platform
 
 **阶段 3**：直接复用 `scripts/templates/` 里的骨架文件，它们已包含几处容易写错的处理——token 失效判定要同时校验「账号未禁用」与「密码未在签发后被改」；AOP 切面必须把方法级 `@annotation` 与类级 `@within` 分开定义切点。
 
-**阶段 4**：Controller 只做参数校验与调用，业务逻辑放 Service。分页统一用 MyBatis-Plus 的 `Page`。每个写操作都要想清楚事务边界。
+**阶段 4**：Controller 只做参数校验与调用，业务逻辑放 Service。分页统一用 MyBatis-Plus 的 `Page`。每个写操作都要想清楚事务边界。若做经验值/等级这类激励体系，务必用**账本制**（流水表 + `(user_id, source_key)` 唯一约束保证幂等），不要按当前状态实时推导——见 [REFERENCE-architecture.md](REFERENCE-architecture.md) §3.6。
 
 **阶段 5**：设计系统先落 `main.css` 的 `:root` Token，页面里禁止写死颜色与圆角。三端共用一套 Token，但布局件分开（学生端顶部导航、教师/管理端侧栏）。
 
@@ -86,7 +86,7 @@ powershell -File scripts/verify.ps1 -ProjectDir D:\my-platform
 
 | 文件 | 内容 |
 |---|---|
-| [REFERENCE-architecture.md](REFERENCE-architecture.md) | 三端功能矩阵、19 张表设计、业务闭环设计 |
+| [REFERENCE-architecture.md](REFERENCE-architecture.md) | 三端功能矩阵、20 张表设计、业务闭环与经验等级体系设计 |
 | [REFERENCE-backend.md](REFERENCE-backend.md) | 后端骨架代码、错误码表、分层约定 |
 | [REFERENCE-frontend.md](REFERENCE-frontend.md) | 请求封装、路由守卫、设计系统 Token、组件约定 |
 | [REFERENCE-ai-integration.md](REFERENCE-ai-integration.md) | 大模型接入：限流、内容安全、三级降级、密钥脱敏 |

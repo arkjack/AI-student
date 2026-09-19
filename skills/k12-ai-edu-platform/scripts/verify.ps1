@@ -56,6 +56,32 @@ function Get-SourceFiles($subDirs, $exts) {
     }
 }
 
+$script:isGitRepo = (Test-Path (Join-Path $root '.git')) -and (Get-Command git -ErrorAction SilentlyContinue)
+$script:ignoredCache = @{}
+
+<#
+    判断文件是否被 .gitignore 忽略。
+    为什么要区分：本地 application-local.yml 里**本来就该**放真实数据库密码
+    （它已被 gitignore，不会进仓库）。把它一律报成 FAIL 会制造无谓恐慌，
+    久了就没人认真看这个脚本了。所以：未入库 → WARN，会入库 → FAIL。
+    注意必须加 --no-index，否则已跟踪文件不会被报告。
+#>
+function Test-GitIgnored($fullPath) {
+    if (-not $script:isGitRepo) { return $false }
+    if ($script:ignoredCache.ContainsKey($fullPath)) { return $script:ignoredCache[$fullPath] }
+
+    $rel = $fullPath
+    if ($rel.StartsWith($root)) { $rel = $rel.Substring($root.Length).TrimStart('\', '/') }
+
+    Push-Location $root
+    & git check-ignore -q --no-index -- $rel 2>$null
+    $result = ($LASTEXITCODE -eq 0)
+    Pop-Location
+
+    $script:ignoredCache[$fullPath] = $result
+    return $result
+}
+
 # ============================================================
 # 1. 明文凭据扫描
 # ============================================================
@@ -92,6 +118,7 @@ foreach ($f in ($scanTargets | Sort-Object FullName -Unique)) {
     foreach ($p in $pats) {
         foreach ($m in [regex]::Matches($text, $p.re)) {
             $credHits += [PSCustomObject]@{
+                FullName = $f.FullName
                 File = $f.FullName.Replace($root, '.')
                 Line = ($text.Substring(0, $m.Index) -split "`n").Count
                 Kind = $p.name
@@ -104,8 +131,22 @@ foreach ($f in ($scanTargets | Sort-Object FullName -Unique)) {
 if ($credHits.Count -eq 0) {
     Pass "源码与配置中未发现明文凭据"
 } else {
-    foreach ($h in $credHits) { Fail "$($h.Kind) ← $($h.File):$($h.Line)  $($h.Text)" }
-    Warn "若为误报（如文档中的示例串），请确认后忽略"
+    # 按「会不会进仓库」分流：被 gitignore 的本地配置本就该放真密码
+    $hitsLocal = @($credHits | Where-Object { Test-GitIgnored $_.FullName })
+    $hitsRepo  = @($credHits | Where-Object { $hitsLocal -notcontains $_ })
+
+    foreach ($h in $hitsRepo) {
+        Fail "会进仓库的明文凭据：$($h.Kind) ← $($h.File):$($h.Line)  $($h.Text)"
+    }
+    foreach ($h in $hitsLocal) {
+        Warn "本地未入库文件含真实凭据（符合预期，但请勿提交、勿外发）：$($h.File):$($h.Line)"
+    }
+    if ($hitsRepo.Count -gt 0) {
+        Info "处理方式：把真实值移到被 gitignore 的本地配置或环境变量，仓库内只留占位符"
+    }
+    if ($hitsLocal.Count -gt 0) {
+        Info "若该文件路径未被 .gitignore 覆盖，请先补规则再提交（见检查 2）"
+    }
 }
 
 # ============================================================
@@ -160,7 +201,7 @@ if (-not $git) {
 # ============================================================
 # 4. mock 数据残留
 # ============================================================
-Section '4. 前端 mock 残留扫描'
+Section '4. 前端 mock / 兜底数据扫描'
 
 $frontViews = Join-Path $root 'frontend\src'
 if (-not (Test-Path $frontViews)) {
@@ -171,10 +212,17 @@ if (-not (Test-Path $frontViews)) {
         Select-String -Pattern 'FALLBACK_|from\s+[''"]@/mock|mock/data' -ErrorAction SilentlyContinue
 
     if ($mocks) {
-        Fail "仍有 $($mocks.Count) 处 mock / FALLBACK 残留 —— 交付前必须替换为真实接口："
+        # 注意：FALLBACK_ 有两种性质完全不同的用法，脚本无法自动区分，必须人工过一眼：
+        #   ① 遗留 mock —— 页面数据其实来自本地常量，接口根本没接。这是缺陷，必须清掉。
+        #   ② 接口失败兜底 —— 写在 catch 里，请求失败时用默认值保证页面不空白。这是**有意设计**。
+        # 所以这里报 WARN 而不是 FAIL，并列出位置供人工确认。
+        Warn "发现 $($mocks.Count) 处 FALLBACK / mock 引用，请逐条确认属于以下哪种："
+        Info "    ① 遗留 mock（页面数据来自本地常量、接口没接）→ 必须替换为真实接口"
+        Info "    ② 接口失败兜底（写在 catch 里保证页面不空白）→ 保留，属有意设计"
         $mocks | Select-Object -First 15 | ForEach-Object {
-            Info ("    " + $_.Path.Replace($root, '.') + ":" + $_.LineNumber)
+            Info ("      " + $_.Path.Replace($root, '.') + ":" + $_.LineNumber)
         }
+        if ($mocks.Count -gt 15) { Info "      ...另有 $($mocks.Count - 15) 处" }
     } else {
         Pass "无 mock / FALLBACK 残留"
     }
