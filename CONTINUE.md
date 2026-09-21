@@ -219,10 +219,20 @@ cd frontend ; npm run dev
 9. **经验加分不要绕过 `ExpService.award`**：幂等与单日上限都在里面，直接 insert `exp_log` 会破坏约束。
 10. **PowerShell 5.1 读 UTF-8 无 BOM 文件会按 GBK 解码**（中文显示乱码，文件本身没问题）；
     判断文件内容请用 read/grep 工具，不要用 PowerShell 字符串匹配下结论。
-11. **git 代理残留会挡住本来能通的网络**：本机 `http.proxy` 曾被设为 `127.0.0.1:9674`，但该端口已无服务；
-    而直连 GitHub 是通的。遇到 `Failed to connect to github.com ... via 127.0.0.1` 时：
-    `git -c http.proxy= -c https.proxy= push origin main`（本次绕过），
-    或 `git config --global --unset http.proxy` + `--unset https.proxy`（永久清掉）。
+11. **git 推送失败先看 VPN 是否开着**：本机 git 有三条代理配置都指向 `http://127.0.0.1:9674` ——
+    `http.proxy`、`https.proxy`，还有一条**针对 github 的专用覆盖** `http.https://github.com.proxy`。
+    这个 9674 **就是本机 VPN 客户端（系统代理模式）的端口**，不是残留垃圾：
+    - VPN 开着 → 9674 有服务，`git push` 直接可用（无需任何参数）；
+    - VPN 没开 → 9674 无人监听，报 `Failed to connect to github.com ... via 127.0.0.1`。
+
+    ⚠️ 注意一个坑：此时**直连也是不通的**（`curl.exe` 与 git 同用 libcurl，会超时 21 秒），
+    但 `Invoke-WebRequest`（.NET 栈）却能返回 200 —— 因为系统代理开关 `ProxyEnable` 与 VPN 联动，
+    .NET 会读它、libcurl 不会。**别因为 PowerShell 能访问就断定网络没问题。**
+
+    若确实需要临时绕过代理：三条都要覆盖，漏掉第三条无效：
+    ```powershell
+    git -c http.proxy= -c https.proxy= -c "http.https://github.com.proxy=" push origin main
+    ```
 12. **诊断性查询不要丢弃 stderr**：本轮踩过 —— `mysql ... 2>/dev/null` 把 `Unknown column` 的报错整个吞掉，
     表现为"表是空的"，白排查一轮（实际是 ALTER 只加在本地库、忘了加服务器）。
 13. **涉及外网的命令要拆小、给短超时**：直连 GitHub 从本机较慢，一条命令里串多个网络请求 + `--retry` + `sleep`
