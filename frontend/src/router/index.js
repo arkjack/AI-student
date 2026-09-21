@@ -38,6 +38,7 @@ const routes = [
       { path: 'tasks', name: 'TeacherTasks', component: () => import('@/views/teacher/TeacherTasks.vue'), meta: { title: '任务布置' } },
       { path: 'progress', name: 'TeacherProgress', component: () => import('@/views/teacher/TeacherProgress.vue'), meta: { title: '进度追踪' } },
       { path: 'review', name: 'TeacherReview', component: () => import('@/views/teacher/TeacherReview.vue'), meta: { title: '作业批改' } },
+      { path: 'content-review', name: 'TeacherContentReview', component: () => import('@/views/teacher/TeacherContentReview.vue'), meta: { title: '内容复核' } },
       { path: 'messages', name: 'TeacherMessages', component: () => import('@/views/shared/MessageCenter.vue'), meta: { title: '消息中心' } },
       { path: 'qa', name: 'TeacherQa', component: () => import('@/views/teacher/TeacherQa.vue'), meta: { title: '答疑互动' } }
     ]
@@ -51,6 +52,7 @@ const routes = [
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/AdminUsers.vue'), meta: { title: '用户管理' } },
       { path: 'courses', name: 'AdminCourses', component: () => import('@/views/admin/AdminCourses.vue'), meta: { title: '课程管理' } },
       { path: 'lab', name: 'AdminLab', component: () => import('@/views/admin/AdminLab.vue'), meta: { title: '实验资源' } },
+      { path: 'safety', name: 'AdminContentSafety', component: () => import('@/views/admin/AdminContentSafety.vue'), meta: { title: '内容安全' } },
       { path: 'announcements', name: 'AdminAnnouncements', component: () => import('@/views/admin/AdminAnnouncements.vue'), meta: { title: '公告与日志' } }
     ]
   },

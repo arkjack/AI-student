@@ -57,6 +57,13 @@
             <button class="opened-close" @click="closeOpenedRecord">关闭</button>
           </div>
 
+          <!-- 内容安全提示：命中过滤时不把安全文案当成作文正文塞进编辑器 -->
+          <div v-if="writingSafetyTip" class="safety-bar">
+            <ShieldWarning :size="15" weight="bold" />
+            <span class="safety-text">{{ writingSafetyTip }}</span>
+            <button class="safety-close" @click="writingSafetyTip = ''">知道了</button>
+          </div>
+
           <div v-if="generating" class="gen-anim">
             <span class="gen-orb">🤖</span>
             <p>AI 正在构思一个有趣的故事…</p>
@@ -119,6 +126,9 @@
           <div class="quiz-level">
             <span class="k-tag k-tag--orange"><Trophy :size="16" weight="bold" /> {{ quiz.level }}</span>
             <span class="quiz-count">第 {{ quiz.index + 1 }} / {{ quizBank.length }} 题</span>
+            <span v-if="quizLimitSec > 0 && quiz.answered === null" class="quiz-timer" :class="{ 'is-urgent': quizLeft <= 5 }">
+              <Timer :size="15" weight="bold" /> {{ quizLeft }}s
+            </span>
           </div>
           <div class="quiz-bar">
             <div class="quiz-bar-fill" :style="{ transform: 'scaleX(' + (quiz.index / quizBank.length) + ')' }"></div>
@@ -206,7 +216,7 @@
             </div>
             <div v-for="(m, i) in msgs" :key="i" class="msg" :class="m.role">
               <span class="msg-avatar">{{ m.role === 'user' ? '🙋' : '🤖' }}</span>
-              <div class="bubble">
+              <div class="bubble" :class="{ 'is-safety': m.filtered }">
                 <span v-if="m.typing">思考中…</span>
                 <span v-else>{{ m.text }}</span>
               </div>
@@ -228,12 +238,12 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
 import { gsap, prefersReducedMotion } from '@/utils/motion'
-import { PhSparkle as Sparkle, PhNotePencil as NotebookPen, PhTrophy as Trophy, PhChatCircleDots as ChatCircleDots, PhFileText as FileText, PhFolderOpen as FolderOpen, PhPaperPlaneTilt as PaperPlaneTilt, PhClock as Clock, PhQuestion as Question, PhCheckCircle as CheckCircle, PhXCircle as XCircle, PhArrowRight as ArrowRight, PhArrowsClockwise as ArrowsClockwise, PhChatCircleText as ChatCircleText, PhLightbulb as LightBulb, PhPencilSimple as PencilSimple, PhCaretRight as CaretRight, PhInfo as Info } from '@phosphor-icons/vue'
+import { PhSparkle as Sparkle, PhNotePencil as NotebookPen, PhTrophy as Trophy, PhChatCircleDots as ChatCircleDots, PhFileText as FileText, PhFolderOpen as FolderOpen, PhPaperPlaneTilt as PaperPlaneTilt, PhClock as Clock, PhQuestion as Question, PhCheckCircle as CheckCircle, PhXCircle as XCircle, PhArrowRight as ArrowRight, PhArrowsClockwise as ArrowsClockwise, PhChatCircleText as ChatCircleText, PhLightbulb as LightBulb, PhPencilSimple as PencilSimple, PhCaretRight as CaretRight, PhInfo as Info, PhShieldWarning as ShieldWarning, PhTimer as Timer } from '@phosphor-icons/vue'
 
 /* ============ 组件内 mock 数据：接口失败/AI 未配置时的 fallback ============ */
 const FALLBACK_QUIZ_BANK = [
@@ -282,6 +292,8 @@ const writing = ref({
   content: ''
 })
 const generating = ref(false)
+/* 内容安全提示：AI 生成内容被拦截/替换，或学生输入不合规时展示 */
+const writingSafetyTip = ref('')
 /* 当前在编辑器里打开的那条历史记录（null = 正在写一篇新的） */
 const openedRecord = ref(null)
 /* 编辑器容器：载入记录后滚动到它，并用一次高亮闪烁告诉学生内容去了哪里 */
@@ -310,6 +322,7 @@ const generateStory = async () => {
   }
   generating.value = true
   writing.value.content = ''
+  writingSafetyTip.value = ''
   // 新生成的故事不再属于之前打开的那条记录，「编辑中」标记要摘掉
   openedRecord.value = null
   try {
@@ -318,11 +331,28 @@ const generateStory = async () => {
       style: writing.value.style,
       length: writing.value.length
     })
+    if (res?.filtered) {
+      /* 生成内容被内容安全机制处置过。后端返回的是安全文案而不是作文，
+         直接写进编辑器会让学生以为「这就是 AI 写的作文」，所以只显示提示条。 */
+      writingSafetyTip.value = res.tip || '这次生成的内容没有通过安全检查，换个主题再试试吧～'
+      writing.value.content = ''
+      return
+    }
     writing.value.content = res?.content || buildStory(writing.value.topic, writing.value.style)
     ElMessage.success('AI 创作完成 ✨')
   } catch (e) {
+    if (e.code === 1201) {
+      // 输入不合规：后端没有调用大模型，这里也不生成任何内容
+      writingSafetyTip.value = e.message || '这个主题不太适合小朋友哦，换一个主题再试试吧～'
+      writing.value.content = ''
+      return
+    }
+    // 其他情况（未配置 / 密钥无效 / 上游故障 / 网络异常）才回退本地示例。
+    // 真实原因管理员可在管理端「内容安全 → 交互日志」查到（hit_stage=5 网络降级）。
     writing.value.content = buildStory(writing.value.topic, writing.value.style)
-    ElMessage.warning('AI 尚未配置，已使用本地示例')
+    ElMessage.warning(e.code === 1101
+      ? 'AI 接口尚未配置，已用本地示例代替（请管理员在「实验资源」页填写 DeepSeek Key）'
+      : 'AI 老师暂时联系不上，已用本地示例代替，稍后再试试吧～')
   } finally {
     generating.value = false
     // 生成结束后的正文一定是 AI 新写的（生成途中若点过历史记录也会被覆盖），
@@ -464,20 +494,26 @@ const quiz = ref({
 })
 
 const quizBank = ref(FALLBACK_QUIZ_BANK)
+/** 每轮题量：由管理端「实验资源」页配置，0 表示该关卡全部题目 */
+const quizGenCount = ref(0)
 const currentQ = computed(() => quizBank.value[quiz.value.index])
 
 const loadQuiz = async () => {
   try {
     const list = await request.get('/quiz/questions', { params: { level: quiz.value.level } })
-    quizBank.value = (list || []).map(q => ({
+    let bank = (list || []).map(q => ({
       q: q.question,
       options: [q.optionA, q.optionB, q.optionC, q.optionD],
       answer: ['A', 'B', 'C', 'D'].indexOf(q.answer)
     }))
-    if (quizBank.value.length === 0) quizBank.value = FALLBACK_QUIZ_BANK
+    if (quizGenCount.value > 0 && bank.length > quizGenCount.value) {
+      bank = bank.slice(0, quizGenCount.value)
+    }
+    quizBank.value = bank.length ? bank : FALLBACK_QUIZ_BANK
   } catch (e) {
     quizBank.value = FALLBACK_QUIZ_BANK
   }
+  startQuizTimer()
 }
 
 const optionClass = (i) => {
@@ -490,6 +526,7 @@ const optionClass = (i) => {
 const answer = (i) => {
   if (quiz.value.answered !== null) return
   quiz.value.answered = i
+  stopQuizTimer()
   const correct = i === currentQ.value.answer
   if (correct) {
     quiz.value.score += 10
@@ -539,6 +576,7 @@ const recordQuiz = async () => {
 }
 
 const nextQuestion = () => {
+  stopQuizTimer()
   if (quiz.value.index === quizBank.value.length - 1) {
     quiz.value.finished = true
     recordQuiz()
@@ -546,10 +584,12 @@ const nextQuestion = () => {
   }
   quiz.value.index += 1
   quiz.value.answered = null
+  startQuizTimer()
 }
 
 const restartQuiz = () => {
   quiz.value = { index: 0, score: 0, correct: 0, answered: null, finished: false, level: 'AI 基础' }
+  startQuizTimer()
 }
 
 /* ---------------- 智能答疑 ---------------- */
@@ -590,20 +630,81 @@ const ask = async (quickQuestion) => {
   try {
     const res = await request.post('/ai/chat', { question: q })
     typingMsg.typing = false
-    typingMsg.text = res?.answer || fallbackReply(q)
+    // 后端返回体统一为 { content, filtered, tip }，不再有 answer 字段
+    typingMsg.text = res?.content || fallbackReply(q)
+    typingMsg.filtered = !!res?.filtered
   } catch (e) {
-    // AI 未配置/失败 → 回退本地示例回答
     typingMsg.typing = false
-    typingMsg.text = fallbackReply(q)
+    if (e.code === 1201) {
+      // 输入不合规：后端未调用大模型，这里也不再伪造一个答案
+      typingMsg.text = e.message || '这个问题不太适合小朋友哦，换一个问题再试试吧～'
+      typingMsg.filtered = true
+    } else {
+      // 未配置/密钥无效/上游故障/网络失败 → 回退本地示例回答
+      typingMsg.text = fallbackReply(q)
+      ElMessage.warning(e.code === 1101
+        ? 'AI 接口尚未配置，已用本地示例回答（请管理员在「实验资源」页填写 DeepSeek Key）'
+        : 'AI 老师暂时联系不上，已用本地示例回答，稍后再试试吧～')
+    }
   }
 }
 
-onMounted(() => {
+/* ------------------------------------------------------------------
+   实验参数：由管理端「实验资源」页配置，学生端只读取展示参数。
+   写作默认风格、闯关每轮题量与答题限时都以此为准，
+   保证管理端改完立即生效，而不是写死在前端。
+   ------------------------------------------------------------------ */
+const quizLimitSec = ref(0)
+const quizLeft = ref(0)
+let quizTimer = null
+
+function stopQuizTimer() {
+  if (quizTimer) {
+    clearInterval(quizTimer)
+    quizTimer = null
+  }
+}
+
+function startQuizTimer() {
+  stopQuizTimer()
+  if (quizLimitSec.value <= 0) return
+  quizLeft.value = quizLimitSec.value
+  quizTimer = setInterval(() => {
+    if (quizLeft.value <= 1) {
+      quizLeft.value = 0
+      stopQuizTimer()
+      // 超时：直接亮出正确答案（answered 置为 -1，不会误标成学生选错）
+      if (quiz.value.answered === null) quiz.value.answered = -1
+      return
+    }
+    quizLeft.value -= 1
+  }, 1000)
+}
+
+async function loadScenePolicies() {
+  try {
+    const w = await request.get('/ai/scene-policy/writing')
+    if (w?.defaultStyle && styles.includes(w.defaultStyle)) {
+      writing.value.style = w.defaultStyle
+    }
+  } catch (e) { /* 读取失败就沿用组件默认值 */ }
+  try {
+    const q = await request.get('/ai/scene-policy/quiz')
+    quizLimitSec.value = q?.answerLimitSec > 0 ? q.answerLimitSec : 0
+    if (q?.genCount > 0) quizGenCount.value = q.genCount
+  } catch (e) { /* 读取失败就不限时限量 */ }
+}
+
+onMounted(async () => {
+  // 先取到管理端配置的实验参数（默认风格、每轮题量、答题限时），再按它加载题目
+  await loadScenePolicies()
   loadWritingRecords()
   loadQuiz()
   loadQaHistory()
   loadQuizHistory()
 })
+
+onBeforeUnmount(stopQuizTimer)
 </script>
 
 <style scoped>
@@ -937,6 +1038,40 @@ onMounted(() => {
 
 .opened-close:hover { background: #fff; }
 
+/* 内容安全提示条：AI 生成内容被拦截/替换，或输入不合规时出现 */
+.safety-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  background: #fdeaef;
+  color: #a82f57;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.safety-bar svg { flex-shrink: 0; }
+
+.safety-text { flex: 1; }
+
+.safety-close {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.safety-close:hover { background: #fff; }
+
 /* 载入记录后编辑器闪一下，提示内容落到了这里 */
 .writing-result.is-flash {
   animation: editor-flash 1.3s ease;
@@ -958,6 +1093,25 @@ onMounted(() => {
 .quiz-count {
   font-size: 13px;
   color: var(--ink-2);
+}
+
+/* 答题倒计时：时长由管理端「实验资源」页配置 */
+.quiz-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-timer.is-urgent {
+  background: #fdeaef;
+  color: #b8325d;
 }
 
 .quiz-bar {
@@ -1229,6 +1383,14 @@ onMounted(() => {
 
 .msg.ai .bubble {
   border-bottom-left-radius: 4px;
+}
+
+/* 被内容安全机制处置过的回答：换成暖色底，和正常回答区分开 */
+.msg.ai .bubble.is-safety {
+  background: #fdeaef;
+  color: #a82f57;
+  border: 1px solid #f8d3de;
+  box-shadow: none;
 }
 
 .chat-input {

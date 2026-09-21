@@ -27,7 +27,7 @@ public class AdminAiConfigServiceImpl implements AdminAiConfigService {
             def.setProvider("deepseek");
             def.setApiKey(mask(null));
             def.setBaseUrl("https://api.deepseek.com/v1");
-            def.setModel("deepseek-chat");
+            def.setModel("deepseek-flash");
             def.setTimeoutSec(60);
             def.setMaxConcurrency(5);
             def.setRateLimitPerMin(20);
@@ -64,7 +64,8 @@ public class AdminAiConfigServiceImpl implements AdminAiConfigService {
             cfg.setRateLimitPerMin(dto.getRateLimitPerMin());
         }
         if (dto.getContentFilter() != null) {
-            cfg.setContentFilter(dto.getContentFilter());
+            // 运行模式只接受 0/1/2，越界值一律收敛为「正常」，避免脏数据把安全链路关掉
+            cfg.setContentFilter(AiConfigEntity.modeOf(dto.getContentFilter()));
         }
         if (cfg.getId() == null) {
             // api_key 列为 NOT NULL 且无默认值：首次保存若未提供密钥，落空串占位
@@ -75,7 +76,13 @@ public class AdminAiConfigServiceImpl implements AdminAiConfigService {
         } else {
             aiConfigMapper.updateById(cfg);
         }
-        operationLogService.record("修改AI配置", "provider=" + (cfg.getProvider() == null ? "deepseek" : cfg.getProvider()));
+        operationLogService.record("修改AI配置",
+                "provider=" + (cfg.getProvider() == null ? "deepseek" : cfg.getProvider())
+                        + "，内容安全模式=" + switch (AiConfigEntity.modeOf(cfg.getContentFilter())) {
+                            case AiConfigEntity.MODE_OFF -> "完全关闭";
+                            case AiConfigEntity.MODE_OBSERVE -> "观察模式";
+                            default -> "正常";
+                        });
     }
 
     private AiConfigEntity firstRow() {

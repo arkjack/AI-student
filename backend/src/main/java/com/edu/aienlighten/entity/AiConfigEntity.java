@@ -26,7 +26,7 @@ public class AiConfigEntity {
     /** 接口基础地址，如 https://api.deepseek.com/v1 */
     private String baseUrl;
 
-    /** 模型名称，如 deepseek-chat */
+    /** 模型名称，如 deepseek-flash（官方现行名）；旧名 deepseek-chat 已不再受支持 */
     private String model;
 
     /** 超时时间（秒） */
@@ -38,6 +38,28 @@ public class AiConfigEntity {
     /** 每分钟限流次数 */
     private Integer rateLimitPerMin;
 
-    /** 内容安全过滤开关：1 开 0 关 */
+    /**
+     * 内容安全运行模式：0 完全关闭 / 1 正常 / 2 观察模式。
+     *
+     * <p>刻意不做成简单开关：面向未成年人的平台不应该有「一键悄悄关掉所有保护」的入口。
+     * 排查误杀请用观察模式——检测、打分、日志照常，只是不拦截。</p>
+     */
     private Integer contentFilter;
+
+    /** 运行模式取值 */
+    public static final int MODE_OFF = 0;
+    public static final int MODE_NORMAL = 1;
+    public static final int MODE_OBSERVE = 2;
+
+    /** 越界或缺省一律按「正常」处理，避免脏数据把安全链路关掉 */
+    public static int modeOf(Integer contentFilter) {
+        if (contentFilter == null) {
+            return MODE_NORMAL;
+        }
+        return switch (contentFilter) {
+            case MODE_OFF -> MODE_OFF;
+            case MODE_OBSERVE -> MODE_OBSERVE;
+            default -> MODE_NORMAL;
+        };
+    }
 }

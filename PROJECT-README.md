@@ -130,7 +130,7 @@ D:\想法、创意、实践\dph\毕业设计\      ← ★ 项目根目录（202
 - [x] **前端对接完成**：三端页面 mock → 真实 API（`src/api/request.js` 统一封装 + vite proxy `/api`→8080；登录/学生/教师/管理端均已端到端验证）
 - [x] **去模拟数据**：学生「学习数据」、管理「数据看板」「实验资源·编程模板」已彻底移除前端 `FALLBACK_*` 模拟数据，全部走真实接口
 - [x] 演示数据已入库（6 课程/4 公告/5 闯关题/班级与学生关联）
-- [ ] DeepSeek key 配置（管理端"实验资源"页面 PUT ai-config 后 AI 实验室真实生效）
+- [x] DeepSeek key 配置（管理端「实验资源」页填写后 AI 实验室真实生效）
 - [ ] 文档：需求分析 / 系统设计 / 测试报告
 - [ ] 测试：功能/兼容/性能
 
@@ -169,33 +169,51 @@ D:\想法、创意、实践\dph\毕业设计\      ← ★ 项目根目录（202
 10. **构建产物清理**：新增 `frontend/scripts/clean-dist.mjs` 挂在 `prebuild` —— 本机环境下 Vite 自带的 `emptyOutDir` **静默失效**（`fs.rmSync(dir, {recursive:true})` 不抛异常也不删任何文件），曾累积到 1300 个文件 / 23 份 `Login-*.js`，并导致已下线代码仍可通过旧哈希访问。
 11. **全局异常处理补 404/405**：路由写错时原本被兜底成 `code:9999 系统繁忙`，排查时极易误判成服务故障。
 
+### 2026-09-21 内容安全体系（第四轮，均已完成）
+
+对应毕业论文任务书新增的「AI 生成内容安全审核机制」与「内容安全与合规性」两条要求。
+完整设计说明见 `README.md` 技术亮点 §8，此处只记改动清单。
+
+1. **敏感词库落库可维护**：新增 `sensitive_word` 表（第 21 张）+ 管理端「内容安全」页，支持增删改、启停、分类分级与批量导入；初始 45 条演示词，「涉政」分类只建分类定义、不预置词条。
+2. **输入侧合规检测**：违规指令在**调用大模型之前**拦下（业务码 `1201`）并落日志。刻意排在密钥校验**之前** —— 输入检测不依赖 API Key，这样「违规指令不进入大模型」才是无条件成立的。
+3. **三重前置过滤**（`ContentSafetyService`）：① 敏感词过滤（硬规则，只对 `level=3` 生效）② 未成年人适宜性评估（按词库分类权重加权打分，≥80 拦截 / 30~79 放行转复核）③ 准确性校验（结构完整性 + 数值型常识启发式比对）。分层是为了避免「一个词就误杀」。
+4. **交互日志与人工复核合一张表**：新增 `ai_interaction_log`（第 22 张），每次调用都写（通过/替换/拦截/降级），`hit_stage` 标明处理层级、`review_status` 标明是否需复核。教师端新增「内容复核」页，按所带班级限定范围；管理员可兜底复核。写日志整体 try/catch —— 日志失败绝不能反过来把 AI 功能搞挂。
+5. **场景策略三表**：新增 `ai_scene_policy`（第 23 张），管理端「实验资源」页三张实验卡片改为真实读写。此前那张卡片上的「敏感词过滤」开关**是写死在前端的演示数据**，改完刷新即还原。
+6. **运行模式三态**：`ai_config.content_filter` 由「1 开 0 关」扩展为「0 完全关闭 / 1 正常 / 2 观察模式」。观察模式下检测、打分、日志全在，**只是不拦截** —— 用来评估误杀率。面向未成年人的平台不应有「一键悄悄关掉所有保护」的入口，故关闭需二次确认 + 界面全局告警。
+7. **提示词结构优化（成本）**：DeepSeek 上下文缓存按公共前缀匹配，命中价是未命中的 1/50。原先把主题/风格拼进 `system` 导致前缀每次都变、**缓存永远命中不了**；现改为 `system` 恒定、变量全部进 `user`。纪律：`system` 里不允许出现任何随请求变化的内容。
+8. **关闭思考模式**：`deepseek-flash` 思考模式默认开启且 effort 为 `high`，会拖慢响应、按输出 token 计费，还可能让思维链吃掉 `max_tokens` 额度导致正文为空；且思考模式下 `temperature` 被静默忽略。请求体显式带 `"thinking": {"type": "disabled"}`。
+9. **上游故障可见化**：密钥无效 / 余额不足 / 被上游限流属**持续性配置故障**，原先被统一吞成「AI 开小差了」，界面上完全看不出原因。现分别返回 `1103 / 1104 / 1105` 并透传真实原因、写交互日志；网络抖动等瞬时故障仍走友好降级。学生端只看到「AI 老师暂时联系不上，已用本地示例代替」，真实原因留给管理端。
+10. **模型名跟进**：DeepSeek 现行模型为 `deepseek-flash`（`deepseek-chat` 已下线），全仓库（Java 默认值 / SQL 种子 / 前端占位符 / 测试脚本 / 技能模板）一并更新，并补了「模型名会变，上线前扫一遍」的检查清单。
+11. **修掉的两个缺陷**：① 管理端「保存配置」发送布尔值 `contentFilter: true` 而后端字段是 `Integer`，Jackson 类型不匹配导致**整个请求 400** —— 即 API Key 从来就存不进去，这解释了线上 `api_key` 为空的现象；② `SafetyResult.flag()` 未携带命中词，导致观察模式下出现「风险分 75 但命中词为空」的无法排查记录。
+
 ### 后端新增接口速查（本次）
 
-| 接口 | 说明 |
-|---|---|
-| `GET /api/auth/classes` | 公开班级列表（注册/管理端选班用） |
-| `GET /api/teacher/classes/applies` | 教师端入班申请列表 |
-| `POST /api/teacher/classes/applies/{id}/approve` | 同意入班申请 |
-| `POST /api/teacher/classes/applies/{id}/reject` | 拒绝入班申请 |
-| `GET /api/homework/my-class` | 学生当前班级状态 |
-| `GET /api/quiz/my` | 我的历次闯关成绩 |
-| `POST /api/qa/ask` / `GET /api/qa/my` | 学生提问 / 我的问答历史（含 `teacherName`） |
-| `GET /api/teacher/qa/list` / `POST /api/teacher/qa/{id}/reply` | 教师查看学生提问 / 回复 |
-| `GET /api/notify/my` / `unread-count` / `POST read-all` / `{id}/read` | 站内消息（角色 0/1/2） |
-| `GET /api/admin/templates` / `PUT /api/admin/templates/{id}/enabled` | 编程模板列表 / 启停 |
-| `GET /api/project/templates` | 启用的编程模板（学生/教师共用） |
-| `GET /api/stats/student/my` | 学生学习数据聚合（真实业务表），含 `streakDays` 与等级字段 |
-| `POST /api/user/change-password` | 修改密码（校验原密码 + 强度 + 失败锁定 + 作废旧 token） |
-| `GET /api/user/preferences` / `PUT` | 读取 / 更新偏好设置（学习提醒、消息通知） |
-| `GET /api/exp/log?limit=20` | 我的经验明细（只返回当前登录用户自己的流水） |
+| 接口 | 角色 | 说明 |
+|---|---|---|
+| `GET /api/admin/content/words` | 0 | 词库分页查询（关键词 / 分类 / 状态） |
+| `POST` / `PUT` / `DELETE /api/admin/content/words[/{id}]` | 0 | 敏感词增改删 |
+| `PUT /api/admin/content/words/{id}/enabled` | 0 | 敏感词启停 |
+| `POST /api/admin/content/words/import` | 0 | 批量导入（一行一词，已存在的自动跳过） |
+| `GET /api/admin/content/words/stats` | 0 | 词库分类统计 |
+| `GET /api/admin/content/logs` | 0 | 全量交互日志（场景 / 层级 / 复核状态 / 关键词 / 日期区间） |
+| `GET /api/admin/content/logs/{id}` | 0 | 日志详情 |
+| `POST /api/admin/content/logs/{id}/review` | 0 | 管理员兜底复核（2 通过 / 3 驳回） |
+| `GET /api/admin/content/summary?days=7` | 0 | 内容安全概览（调用量 / 拦截量 / 替换量 / 降级量 / 待复核量） |
+| `GET` / `PUT /api/admin/ai-scene-policy` | 0 | 三个实验的场景策略读取与保存 |
+| `GET /api/ai/scene-policy/{scene}` | 0/1/2 | 学生端读取实验参数（**只返回风格/题量/限时，不暴露安全开关**） |
+| `GET /api/teacher/content-review/list` | 0/1 | 待复核列表（按所带班级限定） |
+| `GET /api/teacher/content-review/pending-count` | 0/1 | 待复核数量 |
+| `GET` / `POST /api/teacher/content-review/{id}` | 0/1 | 复核详情 / 提交结论 |
 
 ### 后端快速指引（backend 目录）
 
 - 启动：`mvn spring-boot:run`（端口 8080；数据源已配 ai_edu 账号，见 application.yml）
-- 数据库：库 `ai_enlighten`（**20 张表**，初始化脚本 `sql/init.sql` + `class_apply` 入班申请表 + `blockly_template` 编程模板表 + `notification` 站内消息表 + `exp_log` 经验流水表），业务账号与密码见本地 `application-local.yml`（该文件不入库，模板见 `application-local.yml.example`）
+- 数据库：库 `ai_enlighten`（**23 张表**，初始化脚本 `sql/init.sql`；增量脚本 `sql/content-safety.sql` 建内容安全三张表），业务账号与密码见本地 `application-local.yml`（该文件不入库，模板见 `application-local.yml.example`）
 - 演示账号（密码均 123456）：`admin` / `teacher01` / `student01`
-- 接口约定：`/api/auth/login|register` 公开；其余 `/api/**` 需 `Authorization: Bearer <token>`；统一返回 `{code,msg,data}`（code 0 成功；401 未登录/403 无权限/1003 用户名密码错误）
-- 已踩坑备忘：① JDBC `characterEncoding=UTF-8`（不能写 utf8mb4）② BCrypt hash 更新务必用 SQL 文件执行（PowerShell 会展开 `$`）③ 拦截器强制登录后，注册/登录白名单在 `WebConfig.excludePathPatterns`
+- 接口约定：`/api/auth/login|register` 公开；其余 `/api/**` 需 `Authorization: Bearer <token>`；统一返回 `{code,msg,data}`
+  （code 0 成功；401 未登录 / 403 无权限 / 1002 参数校验 / 1003 用户名密码错误 /
+  1101 未配置 / 1102 限流 / 1103 密钥无效 / 1104 余额不足 / 1105 上游限流 / 1201 输入不合规）
+- 已踩坑备忘：① JDBC `characterEncoding=UTF-8`（不能写 utf8mb4）② BCrypt hash 更新务必用 SQL 文件执行（PowerShell 会展开 `$`）③ 拦截器强制登录后，注册/登录白名单在 `WebConfig.excludePathPatterns` ④ **dev server 在跑时不要在 `frontend/` 里执行任何 build**，会污染 `node_modules/.vite` 依赖缓存导致页面白屏 ⑤ 未声明的标识符（如忘记 import 的图标组件）`vite build` 不报错，只在运行时抛 `ReferenceError` 白屏
 
 ## 8. 环境备忘
 

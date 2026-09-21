@@ -2,23 +2,19 @@ package com.edu.aienlighten.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.edu.aienlighten.common.BizException;
-import com.edu.aienlighten.entity.ClassInfo;
-import com.edu.aienlighten.entity.ClassStudent;
 import com.edu.aienlighten.entity.QaRecord;
 import com.edu.aienlighten.entity.User;
-import com.edu.aienlighten.mapper.ClassInfoMapper;
-import com.edu.aienlighten.mapper.ClassStudentMapper;
 import com.edu.aienlighten.mapper.QaRecordMapper;
 import com.edu.aienlighten.mapper.UserMapper;
 import com.edu.aienlighten.security.UserContext;
 import com.edu.aienlighten.service.OperationLogService;
 import com.edu.aienlighten.service.TeacherQaService;
+import com.edu.aienlighten.service.TeacherScopeService;
 import com.edu.aienlighten.vo.ClassStudentVO;
 import com.edu.aienlighten.vo.QaVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -29,14 +25,14 @@ import java.util.stream.Collectors;
 public class TeacherQaServiceImpl implements TeacherQaService {
 
     private final QaRecordMapper qaRecordMapper;
-    private final ClassInfoMapper classInfoMapper;
-    private final ClassStudentMapper classStudentMapper;
     private final UserMapper userMapper;
     private final OperationLogService operationLogService;
+    /** 教师数据范围统一由 TeacherScopeService 提供，避免各处重复写班级关联查询 */
+    private final TeacherScopeService teacherScopeService;
 
     @Override
     public List<QaVO> listStudentQuestions() {
-        List<Long> studentIds = myStudentIds();
+        List<Long> studentIds = teacherScopeService.myStudentIds();
         if (studentIds.isEmpty()) {
             return List.of();
         }
@@ -79,7 +75,7 @@ public class TeacherQaServiceImpl implements TeacherQaService {
 
     @Override
     public List<ClassStudentVO> myClassStudents() {
-        List<Long> studentIds = myStudentIds();
+        List<Long> studentIds = teacherScopeService.myStudentIds();
         if (studentIds.isEmpty()) {
             return List.of();
         }
@@ -98,21 +94,5 @@ public class TeacherQaServiceImpl implements TeacherQaService {
             }
             return vo;
         }).collect(Collectors.toList());
-    }
-
-    /** 收集当前教师所带班级的（去重）学生 id 集合 */
-    private List<Long> myStudentIds() {
-        List<ClassInfo> classes = classInfoMapper.selectList(new LambdaQueryWrapper<ClassInfo>()
-                .eq(ClassInfo::getTeacherId, UserContext.userId()));
-        if (classes.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<Long> classIds = classes.stream().map(ClassInfo::getId).collect(Collectors.toList());
-        List<ClassStudent> relations = classStudentMapper.selectList(new LambdaQueryWrapper<ClassStudent>()
-                .in(ClassStudent::getClassId, classIds));
-        return relations.stream()
-                .map(ClassStudent::getStudentId)
-                .distinct()
-                .collect(Collectors.toList());
     }
 }

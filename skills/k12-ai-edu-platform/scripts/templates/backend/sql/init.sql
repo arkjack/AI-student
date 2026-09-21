@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS `ai_config` (
   `provider` VARCHAR(30) NOT NULL DEFAULT 'deepseek',
   `api_key` VARCHAR(200) NOT NULL COMMENT '密钥（仅后端持有）',
   `base_url` VARCHAR(200) DEFAULT 'https://api.deepseek.com/v1',
-  `model` VARCHAR(50) DEFAULT 'deepseek-chat',
+  `model` VARCHAR(50) DEFAULT 'deepseek-flash',
   `timeout_sec` INT NOT NULL DEFAULT 60,
   `max_concurrency` INT NOT NULL DEFAULT 5,
   `rate_limit_per_min` INT NOT NULL DEFAULT 20,
@@ -307,4 +307,4 @@ INSERT INTO `blockly_template` (id, name, description, level, emoji, enabled) VA
 -- AI 接口配置（单行表，id 固定为 1）。api_key 留空：部署后在管理端「实验资源」页填写；
 -- 留空时 AI 三个接口统一返回业务码 1101（未配置或不可用）。
 INSERT INTO `ai_config` (id, provider, api_key, base_url, model, timeout_sec, max_concurrency, rate_limit_per_min, content_filter) VALUES
-(1, 'deepseek', '', 'https://api.deepseek.com/v1', 'deepseek-chat', 60, 3, 20, 1);
+(1, 'deepseek', '', 'https://api.deepseek.com/v1', 'deepseek-flash', 60, 3, 20, 1);

@@ -2,10 +2,13 @@ package com.edu.aienlighten.controller;
 
 import com.edu.aienlighten.common.Result;
 import com.edu.aienlighten.dto.AiConfigDTO;
+import com.edu.aienlighten.dto.ScenePolicyDTO;
 import com.edu.aienlighten.dto.TemplateEnabledDTO;
+import com.edu.aienlighten.entity.AiScenePolicy;
 import com.edu.aienlighten.security.RequireRole;
 import com.edu.aienlighten.service.AdminAiConfigService;
 import com.edu.aienlighten.service.BlocklyTemplateService;
+import com.edu.aienlighten.service.ContentSafetyService;
 import com.edu.aienlighten.vo.AiConfigVO;
 import com.edu.aienlighten.vo.BlocklyTemplateVO;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ public class AdminResourceController {
 
     private final AdminAiConfigService adminAiConfigService;
     private final BlocklyTemplateService blocklyTemplateService;
+    private final ContentSafetyService contentSafetyService;
 
     /** 编程模板列表（含启停状态） */
     @GetMapping("/templates")
@@ -54,6 +58,26 @@ public class AdminResourceController {
     @RequireRole({0})
     public Result<Void> saveAiConfig(@RequestBody AiConfigDTO dto) {
         adminAiConfigService.save(dto);
+        return Result.ok();
+    }
+
+    /**
+     * 三个 AI 实验场景的安全策略。
+     *
+     * <p>这是「实验资源」页三张实验卡片的数据源——此前页面上的开关是写死在前端的演示数据，
+     * 改完刷新就还原；接到本接口后才是真实生效的配置。</p>
+     */
+    @GetMapping("/ai-scene-policy")
+    @RequireRole({0})
+    public Result<List<AiScenePolicy>> scenePolicies() {
+        return Result.ok(contentSafetyService.allPolicies());
+    }
+
+    /** 保存场景策略（按 scene upsert） */
+    @PutMapping("/ai-scene-policy")
+    @RequireRole({0})
+    public Result<Void> saveScenePolicies(@RequestBody List<ScenePolicyDTO> policies) {
+        contentSafetyService.savePolicies(policies);
         return Result.ok();
     }
 }

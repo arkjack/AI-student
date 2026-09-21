@@ -27,8 +27,18 @@
 ```java
 cfg.setProvider("deepseek");
 cfg.setBaseUrl("https://api.deepseek.com/v1");   // OpenAI 兼容协议
-cfg.setModel("deepseek-chat");
+cfg.setModel("deepseek-flash");                  // ⚠️ 见下方「模型名会变」
 ```
+
+> **⚠️ 模型名会变，别写死旧名。**
+> DeepSeek 现行模型名是 `deepseek-flash`（DeepSeek-V4.1-Flash）与 `deepseek-v4-pro`；
+> 早期文档里的 `deepseek-chat` / `deepseek-reasoner` 已不在官方支持列表中。
+> 模型名落在 `ai_config` 表里就是为了应对这种情况，但**代码里的默认值和 SQL 种子数据也要跟着改**，
+> 否则新装的环境一上来就调不通。上线前扫一遍：
+>
+> ```bash
+> grep -rn "deepseek-" --include=*.java --include=*.sql --include=*.vue .
+> ```
 
 调用时用 Java 内置 `HttpClient` 发 OpenAI 兼容请求即可，**不需要额外引 SDK**：
 
@@ -39,6 +49,30 @@ Authorization: Bearer {apiKey}
 
 // 取 choices[0].message.content；非 200 一律抛 IOException 交给降级处理
 ```
+
+### 思考模式：默认是开的，生成类场景要显式关掉
+
+新模型（`deepseek-flash` / `deepseek-v4-pro`）**思考模式默认开启，且 effort 默认为 `high`**：
+模型会先输出一大段思维链（`reasoning_content`）再给答案。对「写作文 / 科普答疑 / 出选择题」
+这类简单生成任务，它带来三个实际危害：
+
+1. **慢**：学生要等思维链跑完才能看到正文；
+2. **贵**：思维链算输出 token，按输出价计费；
+3. **可能把正文挤没**：思维链和正文共享 `max_tokens` 额度，上限设成 800 时正文可能为空——
+   表现为「接口返回 200，但内容是空的」，很难排查。
+
+而且思考模式下 `temperature` / `presence_penalty` / `frequency_penalty` **会被静默忽略**
+（不报错但不生效），采样参数等于白设。
+
+所以生成类请求应当显式关闭：
+
+```java
+root.put("temperature", 0.7);
+root.put("max_tokens", 800);
+root.putObject("thinking").put("type", "disabled");   // ← 关键
+```
+
+只有确实需要复杂推理的场景（数学解题、多步逻辑）才值得打开，那时再把 `max_tokens` 放大。
 
 ## 3. 限流（必做）
 
